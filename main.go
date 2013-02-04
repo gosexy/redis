@@ -42,12 +42,23 @@ struct timeval redisTimeVal(long sec, long usec) {
 	return t;
 }
 
+int redisGetReplyType(redisReply *r) {
+	return r->type;
+}
+
+redisReply *redisReplyGetElement(redisReply *el, int i) {
+	return el->element[i];
+}
+
 */
 import "C"
 
 import (
 	"fmt"
+	"reflect"
+	"strconv"
 	"time"
+	"unsafe"
 )
 
 func timeVal(timeout time.Duration) C.struct_timeval {
@@ -82,17 +93,122 @@ func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Dura
 	return nil
 }
 
+func (self *Client) command(dest interface{}, values ...[]byte) error {
+
+	argc := len(values)
+	argv := make([](*C.char), argc)
+	argvlen := make([]C.size_t, argc)
+
+	for i, _ := range values {
+		argv[i] = C.CString(string(values[i]))
+		argvlen[i] = C.size_t(len(values[i]))
+	}
+
+	raw := C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+	defer C.freeReplyObject(raw)
+
+	reply := (*C.redisReply)(raw)
+
+	switch C.redisGetReplyType(reply) {
+	case C.REDIS_REPLY_STRING:
+	case C.REDIS_REPLY_ARRAY:
+	case C.REDIS_REPLY_INTEGER:
+	case C.REDIS_REPLY_NIL:
+	case C.REDIS_REPLY_STATUS:
+	case C.REDIS_REPLY_ERROR:
+		return fmt.Errorf(C.GoString(reply.str))
+	}
+
+	rv := reflect.ValueOf(dest)
+	pv := rv
+
+	if pv.Kind() != reflect.Ptr || pv.IsNil() {
+		return fmt.Errorf("Invalid destination type: %v\n", pv)
+	}
+
+	el := rv.Elem()
+
+	switch el.Kind() {
+	case reflect.String:
+		el.Set(reflect.ValueOf(C.GoString(reply.str)))
+	case reflect.Int64:
+		el.Set(reflect.ValueOf(int64(reply.integer)))
+	case reflect.Slice:
+		total := int(reply.elements)
+		elements := make([]string, total)
+		for i := 0; i < total; i++ {
+			item := C.redisReplyGetElement(reply, C.int(i))
+			elements[i] = C.GoString(item.str)
+			C.freeReplyObject(unsafe.Pointer(item))
+		}
+		el.Set(reflect.ValueOf(elements))
+	default:
+		return fmt.Errorf("Unknown receiver kind: %v.", el.Kind())
+	}
+
+	return nil
+}
+
+func (self *Client) Del(name string) (int64, error) {
+	var s int64
+	err := self.command(&s,
+		[]byte(string("DEL")),
+		[]byte(string(name)),
+	)
+	return s, err
+}
+
+func (self *Client) LRange(name string, min int, max int) ([]string, error) {
+	var ret []string
+	err := self.command(&ret,
+		[]byte("LRANGE"),
+		[]byte(string(name)),
+		[]byte(strconv.Itoa(min)),
+		[]byte(strconv.Itoa(max)),
+	)
+	return ret, err
+}
+
+func (self *Client) Get(name string) (string, error) {
+	var s string
+	err := self.command(&s,
+		[]byte(string("GET")),
+		[]byte(string(name)),
+	)
+	return s, err
+}
+
+func (self *Client) Incr(name string) (int64, error) {
+	var ret int64
+	err := self.command(&ret,
+		[]byte(string("INCR")),
+		[]byte(string(name)),
+	)
+	return ret, err
+}
+
+func (self *Client) Set(name string, value string) (string, error) {
+	var s string
+	err := self.command(&s,
+		[]byte(string("SET")),
+		[]byte(string(name)),
+		[]byte(string(value)),
+	)
+	return s, err
+}
+
+func (self *Client) LPush(name string, value string) (int64, error) {
+	var ret int64
+	err := self.command(&ret,
+		[]byte(string("LPUSH")),
+		[]byte(string(name)),
+		[]byte(string(value)),
+	)
+	return ret, err
+}
+
 func (self *Client) Ping() (string, error) {
 	var s string
-
-	// void *redisCommandArgv(redisContext *c, int argc, const char **argv, const size_t *argvlen);
-	argv := [](*C.char){C.CString("PING")}
-	argvlen := []C.size_t{C.size_t(4)}
-
-	reply := C.redisCommandArgv(self.ctx, C.int(1), &argv[0], (*C.size_t)(&argvlen[0]))
-
-	s = C.GoString((*C.redisReply)(reply).str)
-
-	C.freeReplyObject(reply)
-	return s, nil
+	err := self.command(&s, []byte("PING"))
+	return s, err
 }
