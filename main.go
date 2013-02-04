@@ -58,7 +58,7 @@ import (
 	"reflect"
 	"strconv"
 	"time"
-	"unsafe"
+	//"unsafe"
 )
 
 func timeVal(timeout time.Duration) C.struct_timeval {
@@ -93,6 +93,146 @@ func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Dura
 	return nil
 }
 
+func setReplyValue(v reflect.Value, reply *C.redisReply) error {
+
+	switch C.redisGetReplyType(reply) {
+	// Received a string.
+	case C.REDIS_REPLY_STRING, C.REDIS_REPLY_STATUS, C.REDIS_REPLY_ERROR:
+		// Destination type.
+		switch v.Kind() {
+		case reflect.String:
+			// string -> string
+			v.Set(reflect.ValueOf(C.GoString(reply.str)))
+		case reflect.Int:
+			// string -> int
+			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 0)
+			v.Set(reflect.ValueOf(int(i)))
+		case reflect.Int8:
+			// string -> int8
+			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 8)
+			v.Set(reflect.ValueOf(int8(i)))
+		case reflect.Int16:
+			// string -> int16
+			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 16)
+			v.Set(reflect.ValueOf(int16(i)))
+		case reflect.Int32:
+			// string -> int32
+			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 32)
+			v.Set(reflect.ValueOf(int32(i)))
+		case reflect.Int64:
+			// string -> int64
+			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 64)
+			v.Set(reflect.ValueOf(int64(i)))
+		case reflect.Uint:
+			// string -> uint
+			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 0)
+			v.Set(reflect.ValueOf(uint(i)))
+		case reflect.Uint8:
+			// string -> uint8
+			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 8)
+			v.Set(reflect.ValueOf(uint8(i)))
+		case reflect.Uint16:
+			// string -> uint16
+			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 16)
+			v.Set(reflect.ValueOf(uint16(i)))
+		case reflect.Uint32:
+			// string -> uint32
+			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 32)
+			v.Set(reflect.ValueOf(uint32(i)))
+		case reflect.Uint64:
+			// string -> uint64
+			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 64)
+			v.Set(reflect.ValueOf(uint64(i)))
+		default:
+			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
+		}
+	// Received integer.
+	case C.REDIS_REPLY_INTEGER:
+		switch v.Kind() {
+		case reflect.String:
+			// integer -> string
+			v.Set(reflect.ValueOf(fmt.Sprintf("%d", int64(reply.integer))))
+		case reflect.Int:
+			// Different integer types.
+			v.Set(reflect.ValueOf(int(reply.integer)))
+		case reflect.Int8:
+			v.Set(reflect.ValueOf(int8(reply.integer)))
+		case reflect.Int16:
+			v.Set(reflect.ValueOf(int16(reply.integer)))
+		case reflect.Int32:
+			v.Set(reflect.ValueOf(int32(reply.integer)))
+		case reflect.Int64:
+			v.Set(reflect.ValueOf(int64(reply.integer)))
+		case reflect.Uint:
+			v.Set(reflect.ValueOf(uint(reply.integer)))
+		case reflect.Uint8:
+			v.Set(reflect.ValueOf(uint8(reply.integer)))
+		case reflect.Uint16:
+			v.Set(reflect.ValueOf(uint16(reply.integer)))
+		case reflect.Uint32:
+			v.Set(reflect.ValueOf(uint32(reply.integer)))
+		case reflect.Uint64:
+			v.Set(reflect.ValueOf(uint64(reply.integer)))
+		}
+	case C.REDIS_REPLY_ARRAY:
+		switch v.Kind() {
+		case reflect.Slice:
+			var err error
+			total := int(reply.elements)
+			elements := reflect.MakeSlice(v.Type(), total, total)
+			for i := 0; i < total; i++ {
+				item := C.redisReplyGetElement(reply, C.int(i))
+				err = setReplyValue(elements.Index(i), item)
+				if err != nil {
+					return err
+				}
+			}
+			v.Set(elements)
+		default:
+			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
+		}
+	}
+	return nil
+}
+
+func (self *Client) Command(dest interface{}, values ...interface{}) error {
+
+	argc := len(values)
+	argv := make([][]byte, argc)
+
+	for i := 0; i < argc; i++ {
+		value := values[i]
+		switch value.(type) {
+		case string:
+			argv[i] = []byte(value.(string))
+		case int64:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(int64)))
+		case int32:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(int32)))
+		case int16:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(int16)))
+		case int8:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(int8)))
+		case int:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(int)))
+		case uint64:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(uint64)))
+		case uint32:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(uint32)))
+		case uint16:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(uint16)))
+		case uint8:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(uint8)))
+		case uint:
+			argv[i] = []byte(fmt.Sprintf("%d", value.(uint)))
+		default:
+			return fmt.Errorf("Unsupported input type: %v.", reflect.TypeOf(value))
+		}
+	}
+
+	return self.command(dest, argv...)
+}
+
 func (self *Client) command(dest interface{}, values ...[]byte) error {
 
 	argc := len(values)
@@ -110,43 +250,28 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 	reply := (*C.redisReply)(raw)
 
 	switch C.redisGetReplyType(reply) {
-	case C.REDIS_REPLY_STRING:
-	case C.REDIS_REPLY_ARRAY:
-	case C.REDIS_REPLY_INTEGER:
-	case C.REDIS_REPLY_NIL:
-	case C.REDIS_REPLY_STATUS:
+	/*
+		case C.REDIS_REPLY_STRING:
+		case C.REDIS_REPLY_ARRAY:
+		case C.REDIS_REPLY_INTEGER:
+		case C.REDIS_REPLY_NIL:
+		case C.REDIS_REPLY_STATUS:
+	*/
 	case C.REDIS_REPLY_ERROR:
 		return fmt.Errorf(C.GoString(reply.str))
 	}
 
+	if dest == nil {
+		return nil
+	}
+
 	rv := reflect.ValueOf(dest)
-	pv := rv
 
-	if pv.Kind() != reflect.Ptr || pv.IsNil() {
-		return fmt.Errorf("Invalid destination type: %v\n", pv)
+	if rv.Kind() != reflect.Ptr || rv.IsNil() {
+		return fmt.Errorf("Destination is not a pointer: %v\n", rv)
 	}
 
-	el := rv.Elem()
-
-	switch el.Kind() {
-	case reflect.String:
-		el.Set(reflect.ValueOf(C.GoString(reply.str)))
-	case reflect.Int64:
-		el.Set(reflect.ValueOf(int64(reply.integer)))
-	case reflect.Slice:
-		total := int(reply.elements)
-		elements := make([]string, total)
-		for i := 0; i < total; i++ {
-			item := C.redisReplyGetElement(reply, C.int(i))
-			elements[i] = C.GoString(item.str)
-			C.freeReplyObject(unsafe.Pointer(item))
-		}
-		el.Set(reflect.ValueOf(elements))
-	default:
-		return fmt.Errorf("Unknown receiver kind: %v.", el.Kind())
-	}
-
-	return nil
+	return setReplyValue(rv.Elem(), reply)
 }
 
 func (self *Client) Del(name string) (int64, error) {

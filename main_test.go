@@ -134,3 +134,47 @@ func TestList(t *testing.T) {
 	}
 
 }
+
+func TestRawList(t *testing.T) {
+	var r int
+	var items []int
+	var sitems []string
+	var err error
+
+	fmt.Printf("Raw commands\n")
+
+	err = client.Command(nil, "DEL", "list")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	for i := 0; i < 10; i++ {
+		err = client.Command(&r, "LPUSH", "list", i)
+		if err != nil {
+			t.Fatalf("Command failed: %s", err.Error())
+		}
+		fmt.Printf("LPUSH: %v\n", r)
+	}
+
+	err = client.Command(&items, "LRANGE", "list", 0, -1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	for _, item := range items {
+		fmt.Printf("LRANGE -> %d\n", item)
+	}
+
+	err = client.Command(&sitems, "LRANGE", "list", 0, -1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	for _, sitem := range sitems {
+		fmt.Printf("LRANGE -> %s\n", sitem)
+	}
+
+}
