@@ -57,6 +57,7 @@ import (
 	"fmt"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 	//"unsafe"
 )
@@ -278,17 +279,6 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 	return setReplyValue(rv.Elem(), reply)
 }
 
-func (self *Client) LRange(name string, min int, max int) ([]string, error) {
-	var ret []string
-	err := self.command(&ret,
-		[]byte("LRANGE"),
-		[]byte(string(name)),
-		[]byte(strconv.Itoa(min)),
-		[]byte(strconv.Itoa(max)),
-	)
-	return ret, err
-}
-
 func (self *Client) Set(name string, value string) (string, error) {
 	var s string
 	err := self.command(&s,
@@ -297,16 +287,6 @@ func (self *Client) Set(name string, value string) (string, error) {
 		[]byte(string(value)),
 	)
 	return s, err
-}
-
-func (self *Client) LPush(name string, value interface{}) (int64, error) {
-	var ret int64
-	err := self.command(&ret,
-		[]byte(string("LPUSH")),
-		[]byte(string(name)),
-		byteValue(value),
-	)
-	return ret, err
 }
 
 func (self *Client) Ping() (string, error) {
@@ -1210,5 +1190,416 @@ func (self *Client) IncrByFloat(name string, increment float64) (float64, error)
 		[]byte(name),
 		byteValue(increment),
 	)
+	return ret, err
+}
+
+/*
+The INFO command returns information and statistics about the server in a format
+that is simple to parse by computers and easy to read by humans.
+
+http://redis.io/commands/info
+*/
+func (self *Client) Info(section string) ([]string, error) {
+	var ret []string
+	err := self.command(
+		&ret,
+		[]byte("INFO"),
+		[]byte(section),
+	)
+	return ret, err
+}
+
+/*
+Returns all keys matching pattern.
+
+http://redis.io/commands/keys
+*/
+func (self *Client) Keys(pattern string) ([]string, error) {
+	var ret []string
+	err := self.command(
+		&ret,
+		[]byte("KEYS"),
+		[]byte(pattern),
+	)
+	return ret, err
+}
+
+/*
+Return the UNIX TIME of the last DB save executed with success.
+
+http://redis.io/commands/lastsave
+*/
+func (self *Client) LastSave() (int64, error) {
+	var ret int64
+	err := self.command(
+		&ret,
+		[]byte("LASTSAVE"),
+	)
+	return ret, err
+}
+
+/*
+Returns the element at index index in the list stored at key. The index is
+zero-based, so 0 means the first element, 1 the second element and so on.
+Negative indices can be used to designate elements starting at the tail of the
+list. Here, -1 means the last element, -2 means the penultimate and so forth.
+
+http://redis.io/commands/lindex
+*/
+func (self *Client) LIndex(key string, index string) (string, error) {
+	var ret string
+	err := self.command(
+		&ret,
+		[]byte("LINDEX"),
+		[]byte(key),
+		[]byte(index),
+	)
+	return ret, err
+}
+
+/*
+Inserts value in the list stored at key either before or after the reference
+value pivot.
+
+http://redis.io/commands/linsert
+*/
+func (self *Client) LInsert(key string, where string, pivot string, value interface{}) (int64, error) {
+	var ret int64
+
+	where = strings.ToUpper(where)
+
+	if where != "AFTER" && where != "BEFORE" {
+		return 0, fmt.Errorf("The `where` value must be either BEFORE or AFTER.")
+	}
+
+	err := self.command(
+		&ret,
+		[]byte("LINSERT"),
+		[]byte(key),
+		[]byte(where),
+		[]byte(pivot),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the length of the list stored at key. If key does not exist, it is
+interpreted as an empty list and 0 is returned. An error is returned when the
+value stored at key is not a list.
+
+http://redis.io/commands/llen
+*/
+func (self *Client) LLen(key string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("LLEN"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Removes and returns the first element of the list stored at key.
+
+http://redis.io/commands/lpop
+*/
+func (self *Client) LPop(key string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("LPOP"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Insert all the specified values at the head of the list stored at key. If key
+does not exist, it is created as empty list before performing the push
+operations. When key holds a value that is not a list, an error is returned.
+
+http://redis.io/commands/lpush
+*/
+func (self *Client) LPush(key string, values ...interface{}) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(values)+2)
+	args[0] = []byte("LPUSH")
+	args[1] = []byte(key)
+
+	for i, value := range values {
+		args[2+i] = byteValue(value)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Inserts value at the head of the list stored at key, only if key already exists
+and holds a list. In contrary to LPUSH, no operation will be performed when key
+does not yet exist.
+
+http://redis.io/commands/lpushx
+*/
+func (self *Client) LPushX(key string, value interface{}) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("LPUSHX"),
+		[]byte(key),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the specified elements of the list stored at key. The offsets start and
+stop are zero-based indexes, with 0 being the first element of the list (the
+head of the list), 1 being the next element and so on.
+
+http://redis.io/commands/lrange
+*/
+func (self *Client) LRange(key string, start int64, stop int64) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("LRANGE"),
+		[]byte(key),
+		byteValue(start),
+		byteValue(stop),
+	)
+
+	return ret, err
+}
+
+/*
+Removes the first count occurrences of elements equal to value from the list
+stored at key. The count argument influences the operation in the following
+ways:
+
+http://redis.io/commands/lrem
+*/
+func (self *Client) LRem(key string, count int64, value interface{}) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("LREM"),
+		[]byte(key),
+		byteValue(count),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Sets the list element at index to value. For more information on the index
+argument, see LINDEX.
+
+http://redis.io/commands/lset
+*/
+func (self *Client) LSet(key string, index string, value interface{}) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("LSET"),
+		[]byte(key),
+		[]byte(index),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Trim an existing list so that it will contain only the specified range of
+elements specified. Both start and stop are zero-based indexes, where 0 is the
+first element of the list (the head), 1 the next element and so on.
+
+http://redis.io/commands/ltrim
+*/
+func (self *Client) LTrim(key string, start int64, stop int64) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("LTRIM"),
+		[]byte(key),
+		byteValue(start),
+		byteValue(stop),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the values of all specified keys. For every key that does not hold a
+string value or does not exist, the special value nil is returned. Because of
+this, the operation never fails.
+
+*/
+func (self *Client) MGet(keys ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(keys)+1)
+	args[0] = []byte("MGET")
+
+	for i, key := range keys {
+		args[1+i] = []byte(key)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Atomically transfer a key from a source Redis instance to a destination Redis
+instance. On success the key is deleted from the original instance and is
+guaranteed to exist in the target instance.
+
+http://redis.io/commands/migrate
+*/
+func (self *Client) Migrate(host string, port uint, key string, destination string, timeout int64) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("MIGRATE"),
+		[]byte(host),
+		byteValue(port),
+		[]byte(key),
+		[]byte(destination),
+		byteValue(timeout),
+	)
+
+	return ret, err
+}
+
+/*
+Move key from the currently selected database (see SELECT) to the specified
+destination database. When key already exists in the destination database, or
+it does not exist in the source database, it does nothing. It is possible to
+use MOVE as a locking primitive because of this.
+
+http://redis.io/commands/move
+*/
+func (self *Client) Move(key string, db string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("MOVE"),
+		[]byte(key),
+		[]byte(db),
+	)
+
+	return ret, err
+}
+
+/*
+Sets the given keys to their respective values. MSET replaces existing values
+with new values, just as regular SET. See MSETNX if you don't want to overwrite
+existing values.
+
+http://redis.io/commands/mset
+*/
+func (self *Client) MSet(values ...interface{}) (int64, error) {
+	var ret int64
+
+	if len(values)%2 != 0 {
+		return 0, fmt.Errorf("Expecting a field:value pair.")
+	}
+
+	args := make([][]byte, len(values)+1)
+	args[0] = []byte("MSET")
+
+	for i, value := range values {
+		args[1+i] = byteValue(value)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Sets the given keys to their respective values. MSETNX will not perform any
+operation at all even if just a single key already exists.
+
+http://redis.io/commands/msetnx
+*/
+func (self *Client) MSetNX(values ...interface{}) (int64, error) {
+	var ret int64
+
+	if len(values)%2 != 0 {
+		return 0, fmt.Errorf("Expecting a field:value pair.")
+	}
+
+	args := make([][]byte, len(values)+1)
+	args[0] = []byte("MSETNX")
+
+	for i, value := range values {
+		args[1+i] = byteValue(value)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Marks the start of a transaction block. Subsequent commands will be queued for
+atomic execution using EXEC.
+
+http://redis.io/commands/multi
+*/
+func (self *Client) Multi() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("MULTI"),
+	)
+
+	return ret, err
+}
+
+/*
+The OBJECT command allows to inspect the internals of Redis Objects associated
+with keys. It is useful for debugging or to understand if your keys are using
+the specially encoded data types to save space. Your application may also use
+the information reported by the OBJECT command to implement application level
+key eviction policies when using Redis as a Cache.
+
+http://redis.io/commands/object
+*/
+func (self *Client) Object(subcommand string, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("OBJECT")
+	args[1] = []byte(subcommand)
+
+	for i, arg := range arguments {
+		args[2+i] = byteValue(arg)
+	}
+
+	err := self.command(&ret, args...)
+
 	return ret, err
 }
