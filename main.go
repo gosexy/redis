@@ -907,3 +907,203 @@ func (self *Client) GetSet(key string, value interface{}) (string, error) {
 	)
 	return ret, err
 }
+
+/*
+Removes the specified fields from the hash stored at key. Specified fields that
+do not exist within this hash are ignored. If key does not exist, it is treated
+as an empty hash and this command returns 0.
+
+http://redis.io/commands/hdel
+*/
+func (self *Client) HDel(key string, fields ...string) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(fields)+1)
+	args[0] = []byte("HDEL")
+
+	for i, field := range fields {
+		args[1+i] = byteValue(field)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns if field is an existing field in the hash stored at key.
+
+http://redis.io/commands/hexists
+*/
+func (self *Client) HExists(key string, field string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("HEXISTS"),
+		[]byte(key),
+		[]byte(field),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the value associated with field in the hash stored at key.
+
+http://redis.io/commands/hget
+*/
+func (self *Client) HGet(key string, field string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("HGET"),
+		[]byte(key),
+		[]byte(field),
+	)
+
+	return ret, err
+}
+
+/*
+Returns all fields and values of the hash stored at key. In the returned value,
+every field name is followed by its value, so the length of the reply is twice
+the size of the hash.
+
+http://redis.io/commands/hgetall
+*/
+func (self *Client) HGetAll(key string) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("HGETALL"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Increments the number stored at field in the hash stored at key by increment. If
+key does not exist, a new key holding a hash is created. If field does not exist
+the value is set to 0 before the operation is performed.
+
+http://redis.io/commands/hincrby
+*/
+func (self *Client) HIncrBy(key string, field string, increment int64) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("HINCRBY"),
+		[]byte(key),
+		[]byte(field),
+		byteValue(increment),
+	)
+
+	return ret, err
+}
+
+/*
+Increment the specified field of an hash stored at key, and representing a
+floating point number, by the specified increment. If the field does not exist,
+it is set to 0 before performing the operation.
+
+http://redis.io/commands/hincrbyfloat
+*/
+func (self *Client) HIncrByFloat(key string, field string, increment float64) (float64, error) {
+	var ret float64
+
+	err := self.command(
+		&ret,
+		[]byte("HINCRBYFLOAT"),
+		[]byte(key),
+		[]byte(field),
+		byteValue(increment),
+	)
+
+	return ret, err
+}
+
+/*
+Returns all field names in the hash stored at key.
+
+http://redis.io/commands/hkeys
+*/
+func (self *Client) HKeys(key string) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("HKEYS"),
+		[]byte(key),
+	)
+
+	return ret, err
+
+}
+
+/*
+Returns the number of fields contained in the hash stored at key.
+
+http://redis.io/commands/hlen
+*/
+func (self *Client) HLen(key string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("HLEN"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the values associated with the specified fields in the hash stored at key.
+
+http://redis.io/commands/hmget
+*/
+func (self *Client) HMGet(key string, fields ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(fields)+1)
+	args[0] = []byte("HMGET")
+
+	for i, field := range fields {
+		args[1+i] = byteValue(field)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Sets the specified fields to their respective values in the hash stored at key.
+This command overwrites any existing fields in the hash. If key does not exist,
+a new key holding a hash is created.
+
+http://redis.io/commands/hmset
+*/
+func (self *Client) HMSet(key string, values ...string) (string, error) {
+	var ret string
+
+	if len(values)%2 != 0 {
+		return "", fmt.Errorf("Expecting a field:value pair.")
+	}
+
+	args := make([][]byte, len(values)+1)
+	args[0] = []byte("HMSET")
+
+	for i, value := range values {
+		args[1+i] = byteValue(value)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
