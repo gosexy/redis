@@ -289,15 +289,6 @@ func (self *Client) LRange(name string, min int, max int) ([]string, error) {
 	return ret, err
 }
 
-func (self *Client) Incr(name string) (int64, error) {
-	var ret int64
-	err := self.command(&ret,
-		[]byte(string("INCR")),
-		[]byte(string(name)),
-	)
-	return ret, err
-}
-
 func (self *Client) Set(name string, value string) (string, error) {
 	var s string
 	err := self.command(&s,
@@ -1105,5 +1096,119 @@ func (self *Client) HMSet(key string, values ...string) (string, error) {
 
 	err := self.command(&ret, args...)
 
+	return ret, err
+}
+
+/*
+Sets field in the hash stored at key to value. If key does not exist, a new key
+holding a hash is created. If field already exists in the hash, it is
+overwritten.
+
+http://redis.io/commands/hset
+*/
+func (self *Client) HSet(key string, field string, value string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("HSET"),
+		[]byte(key),
+		[]byte(field),
+		[]byte(value),
+	)
+
+	return ret, err
+}
+
+/*
+Sets field in the hash stored at key to value, only if field does not yet exist.
+If key does not exist, a new key holding a hash is created. If field already
+exists, this operation has no effect.
+
+http://redis.io/commands/hsetnx
+*/
+func (self *Client) HSetNX(key string, field string, value string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("HSETNX"),
+		[]byte(key),
+		[]byte(field),
+		[]byte(value),
+	)
+
+	return ret, err
+}
+
+/*
+Returns all values in the hash stored at key.
+
+http://redis.io/commands/hvals
+*/
+func (self *Client) HVals(key string) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("HVALS"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Increments the number stored at key by one. If the key does not exist, it is set
+to 0 before performing the operation. An error is returned if the key contains a
+value of the wrong type or contains a string that can not be represented as
+integer. This operation is limited to 64 bit signed integers.
+
+http://redis.io/commands/incr
+*/
+func (self *Client) Incr(name string) (int64, error) {
+	var ret int64
+	err := self.command(
+		&ret,
+		[]byte("INCR"),
+		[]byte(name),
+	)
+	return ret, err
+}
+
+/*
+Increments the number stored at key by increment. If the key does not exist, it
+is set to 0 before performing the operation. An error is returned if the key
+contains a value of the wrong type or contains a string that can not be
+represented as integer. This operation is limited to 64 bit signed integers.
+
+http://redis.io/commands/incrby
+*/
+func (self *Client) IncrBy(name string, increment int64) (int64, error) {
+	var ret int64
+	err := self.command(
+		&ret,
+		[]byte("INCRBY"),
+		[]byte(name),
+		byteValue(increment),
+	)
+	return ret, err
+}
+
+/*
+Increment the string representing a floating point number stored at key by the
+specified increment. If the key does not exist, it is set to 0 before
+performing the operation.
+
+http://redis.io/commands/incrbyfloat
+*/
+func (self *Client) IncrByFloat(name string, increment float64) (float64, error) {
+	var ret float64
+	err := self.command(
+		&ret,
+		[]byte("INCRBYFLOAT"),
+		[]byte(name),
+		byteValue(increment),
+	)
 	return ret, err
 }
