@@ -279,22 +279,6 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 	return setReplyValue(rv.Elem(), reply)
 }
 
-func (self *Client) Set(name string, value string) (string, error) {
-	var s string
-	err := self.command(&s,
-		[]byte(string("SET")),
-		[]byte(string(name)),
-		[]byte(string(value)),
-	)
-	return s, err
-}
-
-func (self *Client) Ping() (string, error) {
-	var s string
-	err := self.command(&s, []byte("PING"))
-	return s, err
-}
-
 /*
 If key already exists and is a string, this command appends the value at the
 end of the string. If key does not exist it is created and set as an empty
@@ -1600,6 +1584,705 @@ func (self *Client) Object(subcommand string, arguments ...interface{}) ([]strin
 	}
 
 	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Remove the existing timeout on key, turning the key from volatile (a key with an
+expire set) to persistent (a key that will never expire as no timeout is
+associated).
+
+http://redis.io/commands/persist
+*/
+func (self *Client) Persist(key string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("PERSIST"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+This command works exactly like EXPIRE but the time to live of the key is
+specified in milliseconds instead of seconds.
+
+http://redis.io/commands/pexpire
+*/
+func (self *Client) PExpire(key string, milliseconds int64) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("PEXPIRE"),
+		[]byte(key),
+		byteValue(milliseconds),
+	)
+
+	return ret, err
+}
+
+/*
+PEXPIREAT has the same effect and semantic as EXPIREAT, but the Unix time at
+which the key will expire is specified in milliseconds instead of seconds.
+
+http://redis.io/commands/pexpireat
+*/
+func (self *Client) PExpireAt(key string, milliseconds int64) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("PEXPIREAT"),
+		[]byte(key),
+		byteValue(milliseconds),
+	)
+
+	return ret, err
+}
+
+/*
+Returns PONG. This command is often used to test if a connection is still alive,
+or to measure latency.
+
+http://redis.io/commands/ping
+*/
+func (self *Client) Ping() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("PING"),
+	)
+
+	return ret, err
+}
+
+/*
+PSETEX works exactly like SETEX with the sole difference that the expire time is
+specified in milliseconds instead of seconds.
+
+http://redis.io/commands/psetex
+*/
+func (self *Client) PSetEx(key string, milliseconds int64, value interface{}) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("PSETEX"),
+		[]byte(key),
+		byteValue(milliseconds),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Subscribes the client to the given patterns.
+
+http://redis.io/commands/psubscribe
+*/
+func (self *Client) PSubscribe(key ...string) (string, error) {
+	var ret string
+
+	args := make([][]byte, len(key)+1)
+	args[0] = []byte("PSUBSCRIBE")
+
+	for i, v := range key {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Like TTL this command returns the remaining time to live of a key that has an
+expire set, with the sole difference that TTL returns the amount of remaining
+time in seconds while PTTL returns it in milliseconds.
+
+http://redis.io/commands/pttl
+*/
+func (self *Client) Pttl(key string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("PTTL"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Posts a message to the given channel.
+
+http://redis.io/commands/publish
+*/
+func (self *Client) Publish(channel string, message interface{}) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("PUBLISH"),
+		[]byte(channel),
+		byteValue(message),
+	)
+
+	return ret, err
+}
+
+/*
+Unsubscribes the client from the given patterns, or from all of them if none is
+given.
+
+http://redis.io/commands/punsubscribe
+*/
+func (self *Client) PUnsubscribe(pattern ...string) (string, error) {
+	var ret string
+
+	args := make([][]byte, len(pattern)+1)
+	args[0] = []byte("PUNSUBSCRIBE")
+
+	for i, pat := range pattern {
+		args[1+i] = byteValue(pat)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Ask the server to close the connection. The connection is closed as soon as all
+pending replies have been written to the client.
+
+http://redis.io/commands/quit
+*/
+func (self *Client) Quit() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("QUIT"),
+	)
+
+	return ret, err
+}
+
+/*
+Return a random key from the currently selected database.
+
+http://redis.io/commands/randomkey
+*/
+func (self *Client) RandomKey() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("RANDOMKEY"),
+	)
+
+	return ret, err
+}
+
+/*
+Renames key to newkey. It returns an error when the source and destination names
+are the same, or when key does not exist. If newkey already exists it is
+overwritten.
+
+http://redis.io/commands/rename
+*/
+func (self *Client) Rename(key string, newkey string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("RENAME"),
+		[]byte(key),
+		[]byte(newkey),
+	)
+
+	return ret, err
+}
+
+/*
+Renames key to newkey if newkey does not yet exist. It returns an error under
+the same conditions as RENAME.
+
+http://redis.io/commands/renamenx
+*/
+func (self *Client) RenameNX(key string, newkey string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("RENAMENX"),
+		[]byte(key),
+		[]byte(newkey),
+	)
+
+	return ret, err
+}
+
+/*
+Create a key associated with a value that is obtained by deserializing the
+provided serialized value (obtained via DUMP).
+
+http://redis.io/commands/restore
+*/
+func (self *Client) Restore(key string, ttl int64, serializedValue string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("RESTORE"),
+		[]byte(key),
+		byteValue(ttl),
+		[]byte(serializedValue),
+	)
+
+	return ret, err
+}
+
+/*
+Removes and returns the last element of the list stored at key.
+
+http://redis.io/commands/restore
+*/
+func (self *Client) RPop(key string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("RPOP"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Atomically returns and removes the last element (tail) of the list stored at
+source, and pushes the element at the first element (head) of the list stored
+at destination.
+
+http://redis.io/commands/rpoplpush
+*/
+func (self *Client) RPopLPush(source string, destination string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("RPOPLPUSH"),
+		[]byte(source),
+		[]byte(destination),
+	)
+
+	return ret, err
+}
+
+/*
+Insert all the specified values at the tail of the list stored at key. If key
+does not exist, it is created as empty list before performing the push
+operation. When key holds a value that is not a list, an error is returned.
+
+http://redis.io/commands/rpush
+*/
+func (self *Client) RPush(key string, values ...interface{}) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(values)+1)
+	args[0] = []byte("RPUSH")
+
+	for i, v := range values {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Inserts value at the tail of the list stored at key, only if key already exists
+and holds a list. In contrary to RPUSH, no operation will be performed when key
+does not yet exist.
+
+http://redis.io/commands/rpushx
+*/
+func (self *Client) RPushX(key string, value interface{}) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("RPUSHX"),
+		[]byte(key),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Add the specified members to the set stored at key. Specified members that are
+already a member of this set are ignored. If key does not exist, a new set is
+created before adding the specified members.
+
+http://redis.io/commands/sadd
+*/
+func (self *Client) SAdd(key string, member ...interface{}) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(member)+2)
+	args[0] = []byte("SADD")
+	args[1] = []byte(key)
+
+	for i, v := range member {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+The SAVE commands performs a synchronous save of the dataset producing a point
+in time snapshot of all the data inside the Redis instance, in the form of an
+RDB file.
+
+http://redis.io/commands/save
+*/
+func (self *Client) Save() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SAVE"),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the set cardinality (number of elements) of the set stored at key.
+
+http://redis.io/commands/scard
+*/
+func (self *Client) SCard(key string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("SCARD"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Returns information about the existence of the scripts in the script cache.
+
+http://redis.io/commands/script-exists
+*/
+func (self *Client) ScriptExists(script ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(script)+1)
+	args[0] = []byte("SCRIPT EXISTS")
+
+	for i, v := range script {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Flush the Lua scripts cache.
+
+http://redis.io/commands/script-flush
+*/
+func (self *Client) ScriptFlush() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SCRIPT FLUSH"),
+	)
+
+	return ret, err
+
+}
+
+/*
+Kills the currently executing Lua script, assuming no write operation was yet
+performed by the script.
+
+http://redis.io/commands/script-kill
+*/
+func (self *Client) ScriptKill() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SCRIPT KILL"),
+	)
+
+	return ret, err
+}
+
+/*
+Load a script into the scripts cache, without executing it. After the specified
+command is loaded into the script cache it will be callable using EVALSHA with
+the correct SHA1 digest of the script, exactly like after the first successful
+invocation of EVAL.
+
+http://redis.io/commands/script-load
+*/
+func (self *Client) ScriptLoad(script string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SCRIPT LOAD"),
+		[]byte(script),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the members of the set resulting from the difference between the first
+set and all the successive sets.
+
+http://redis.io/commands/sdiff
+*/
+func (self *Client) SDiff(key ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(key)+1)
+	args[0] = []byte("SDIFF")
+
+	for i, v := range key {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+This command is equal to SDIFF, but instead of returning the resulting set, it
+is stored in destination.
+
+http://redis.io/commands/sdiffstore
+*/
+func (self *Client) SDiffStore(destination string, key ...string) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(key)+2)
+	args[0] = []byte("SDIFFSTORE")
+	args[1] = []byte(destination)
+
+	for i, v := range key {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Select the DB with having the specified zero-based numeric index. New
+connections always use DB 0.
+
+http://redis.io/commands/select
+*/
+func (self *Client) Select(index int64) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SELECT"),
+		byteValue(index),
+	)
+
+	return ret, err
+}
+
+/*
+Set key to hold the string value. If key already holds a value, it is
+overwritten, regardless of its type.
+
+http://redis.io/commands/set
+*/
+func (self *Client) Set(key string, value interface{}) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SET"),
+		[]byte(key),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Sets or clears the bit at offset in the string value stored at key.
+
+http://redis.io/commands/setbit
+*/
+func (self *Client) SetBit(key string, offset int64, value int) (int, error) {
+	var ret int
+
+	err := self.command(
+		&ret,
+		[]byte("SETBIT"),
+		[]byte(key),
+		byteValue(offset),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Set key to hold the string value and set key to timeout after a given number of
+seconds. This command is equivalent to executing the following commands:
+
+http://redis.io/commands/setex
+*/
+func (self *Client) SetEx(key string, seconds int64, value interface{}) (int, error) {
+	var ret int
+
+	err := self.command(
+		&ret,
+		[]byte("SETEX"),
+		[]byte(key),
+		byteValue(seconds),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Set key to hold string value if key does not exist. In that case, it is equal to
+SET. When key already holds a value, no operation is performed. SETNX is short
+for "SET if N ot e X ists".
+
+http://redis.io/commands/setnx
+*/
+func (self *Client) SetNX(key string, value interface{}) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SETNX"),
+		[]byte(key),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Overwrites part of the string stored at key, starting at the specified offset,
+for the entire length of value. If the offset is larger than the current length
+of the string at key, the string is padded with zero-bytes to make offset fit.
+Non-existing keys are considered as empty strings, so this command will make
+sure it holds a string large enough to be able to set value at offset.
+
+http://redis.io/commands/setrange
+*/
+func (self *Client) SetRange(key string, offset int64, value interface{}) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("SETRANGE"),
+		[]byte(key),
+		byteValue(offset),
+		byteValue(value),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the members of the set resulting from the intersection of all the given sets.
+
+http://redis.io/commands/sinter
+*/
+func (self *Client) SInter(key string, against ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(against)+2)
+	args[0] = []byte("SINTER")
+	args[1] = []byte(key)
+
+	for i, v := range against {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+This command is equal to SINTER, but instead of returning the resulting set, it
+is stored in destination.
+
+http://redis.io/commands/sinterstore
+*/
+func (self *Client) SInterStore(destination string, key string, against ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(against)+3)
+	args[0] = []byte("SINTERSTORE")
+	args[1] = []byte(destination)
+	args[2] = []byte(key)
+
+	for i, v := range against {
+		args[3+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns if member is a member of the set stored at key.
+
+http://redis.io/commands/sismember
+*/
+func (self *Client) SIsMember(key string, member string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("SISMEMBER"),
+		[]byte(key),
+		[]byte(member),
+	)
 
 	return ret, err
 }
