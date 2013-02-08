@@ -704,7 +704,8 @@ func (self *Client) Echo(message string) (string, error) {
 }
 
 /*
-Executes all previously queued commands in a transaction and restores the connection state to normal.
+Executes all previously queued commands in a transaction and restores the
+connection state to normal.
 
 http://redis.io/commands/exec
 */
@@ -769,7 +770,8 @@ func (self *Client) ExpireAt(key string, unixTime uint64) (bool, error) {
 }
 
 /*
-Delete all the keys of all the existing databases, not just the currently selected one. This command never fails.
+Delete all the keys of all the existing databases, not just the currently
+selected one. This command never fails.
 
 http://redis.io/commands/flushall
 */
@@ -2283,6 +2285,733 @@ func (self *Client) SIsMember(key string, member string) (bool, error) {
 		[]byte(key),
 		[]byte(member),
 	)
+
+	return ret, err
+}
+
+/*
+The SLAVEOF command can change the replication settings of a slave on the fly.
+If a Redis server is already acting as slave, the command SLAVEOF NO ONE will
+turn off the replication, turning the Redis server into a MASTER. In the proper
+form SLAVEOF hostname port will make the server a slave of another server
+listening at the specified hostname and port.
+
+http://redis.io/commands/slaveof
+*/
+func (self *Client) SlaveOf(key string, port uint) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SLAVEOF"),
+		[]byte(key),
+		byteValue(port),
+	)
+
+	return ret, err
+}
+
+/*
+This command is used in order to read and reset the Redis slow queries log.
+
+http://redis.io/commands/slowlog
+*/
+func (self *Client) SlowLog(subcommand string, argument interface{}) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("SLOWLOG"),
+		[]byte(subcommand),
+		byteValue(argument),
+	)
+
+	return ret, err
+}
+
+/*
+Returns all the members of the set value stored at key.
+
+http://redis.io/commands/smembers
+*/
+func (self *Client) SMembers(key string) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("SMEMBERS"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Move member from the set at source to the set at destination. This operation is
+atomic. In every given moment the element will appear to be a member of source
+or destination for other clients.
+
+http://redis.io/commands/smove
+*/
+func (self *Client) SMove(source string, destination string, member string) (bool, error) {
+	var ret bool
+
+	err := self.command(
+		&ret,
+		[]byte("SMOVE"),
+		[]byte(source),
+		[]byte(destination),
+		[]byte(member),
+	)
+
+	return ret, err
+}
+
+/*
+Returns or stores the elements contained in the list, set or sorted set at key.
+By default, sorting is numeric and elements are compared by their value
+interpreted as double precision floating point number.
+
+http://redis.io/commands/sort
+*/
+func (self *Client) Sort(key string, arguments ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+1)
+	args[0] = []byte("SORT")
+	args[1] = []byte(key)
+
+	for i, v := range arguments {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Removes and returns a random element from the set value stored at key.
+
+http://redis.io/commands/spop
+*/
+func (self *Client) Spop(key string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SPOP"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+When called with just the key argument, return a random element from the set
+value stored at key.
+
+http://redis.io/commands/srandmember
+*/
+func (self *Client) SRandMember(key string, count int64) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("SRANDMEMBER"),
+		[]byte(key),
+		byteValue(count),
+	)
+
+	return ret, err
+}
+
+/*
+Remove the specified members from the set stored at key. Specified members that
+are not a member of this set are ignored. If key does not exist, it is treated
+as an empty set and this command returns 0.
+
+http://redis.io/commands/srem
+*/
+func (self *Client) SRem(key string, members ...string) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(members)+2)
+	args[0] = []byte("SREM")
+	args[1] = []byte(key)
+
+	for i, v := range members {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns the length of the string value stored at key. An error is returned when
+key holds a non-string value.
+
+http://redis.io/commands/strlen
+*/
+func (self *Client) Strlen(key string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("STRLEN"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Subscribes the client to the specified channels.
+
+http://redis.io/commands/subscribe
+*/
+func (self *Client) Subscribe(channel ...string) (string, error) {
+	var ret string
+
+	args := make([][]byte, len(channel)+1)
+	args[0] = []byte("SUBSCRIBE")
+
+	for i, v := range channel {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns the members of the set resulting from the union of all the given sets.
+
+http://redis.io/commands/sunion
+*/
+func (self *Client) SUnion(key ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(key)+1)
+	args[0] = []byte("SUNION")
+
+	for i, v := range key {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+This command is equal to SUNION, but instead of returning the resulting set, it
+is stored in destination.
+
+http://redis.io/commands/sunionstore
+*/
+func (self *Client) SUnionStore(destination string, key ...string) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(key)+2)
+	args[0] = []byte("SUNION")
+	args[1] = []byte(destination)
+
+	for i, v := range key {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+http://redis.io/commands/sync
+*/
+func (self *Client) Sync() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("SYNC"),
+	)
+
+	return ret, err
+}
+
+/*
+The TIME command returns the current server time as a two items lists: a Unix
+timestamp and the amount of microseconds already elapsed in the current second.
+Basically the interface is very similar to the one of the gettimeofday system
+call.
+
+http://redis.io/commands/time
+*/
+func (self *Client) Time() ([]uint64, error) {
+	var ret []uint64
+
+	err := self.command(
+		&ret,
+		[]byte("TIME"),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the remaining time to live of a key that has a timeout. This
+introspection capability allows a Redis client to check how many seconds a given
+key will continue to be part of the dataset.
+
+http://redis.io/commands/ttl
+*/
+func (self *Client) Ttl(key string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("TTL"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the string representation of the type of the value stored at key. The
+different types that can be returned are: string, list, set, zset and hash.
+
+http://redis.io/commands/type
+*/
+func (self *Client) Type(key string) (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("TYPE"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Unsubscribes the client from the given channels, or from all of them if none is
+given.
+
+http://redis.io/commands/unsubscribe
+*/
+func (self *Client) Unsubscribe(channel ...string) (string, error) {
+	var ret string
+
+	args := make([][]byte, len(channel)+1)
+	args[0] = []byte("UNSUBSCRIBE")
+
+	for i, v := range channel {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Flushes all the previously watched keys for a transaction.
+
+http://redis.io/commands/unwatch
+*/
+func (self *Client) Unwatch() (string, error) {
+	var ret string
+
+	err := self.command(
+		&ret,
+		[]byte("UNWATCH"),
+	)
+
+	return ret, err
+}
+
+/*
+Marks the given keys to be watched for conditional execution of a transaction.
+
+http://redis.io/commands/watch
+*/
+func (self *Client) Watch(key ...string) (string, error) {
+	var ret string
+
+	args := make([][]byte, len(key)+1)
+	args[0] = []byte("WATCH")
+
+	for i, v := range key {
+		args[1+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Adds all the specified members with the specified scores to the sorted set
+stored at key. It is possible to specify multiple score/member pairs. If a
+specified member is already a member of the sorted set, the score is updated and
+the element reinserted at the right position to ensure the correct ordering. If
+key does not exist, a new sorted set with the specified members as sole members
+is created, like if the sorted set was empty. If the key exists but does not
+hold a sorted set, an error is returned.
+
+http://redis.io/commands/zadd
+*/
+func (self *Client) ZAdd(key string, arguments ...interface{}) (int64, error) {
+	var ret int64
+
+	if len(arguments)%2 != 0 {
+		return 0, fmt.Errorf("Failed to relate SCORE -> MEMBER using the given arguments.")
+	}
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("ZADD")
+	args[1] = []byte(key)
+
+	for i, v := range arguments {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns the sorted set cardinality (number of elements) of the sorted set stored at key.
+
+http://redis.io/commands/zcard
+*/
+func (self *Client) ZCard(key string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("ZCARD"),
+		[]byte(key),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the number of elements in the sorted set at key with a score between min
+and max.
+
+http://redis.io/commands/zcount
+*/
+func (self *Client) ZCount(key string, min interface{}, max interface{}) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("ZCOUNT"),
+		[]byte(key),
+		byteValue(min),
+		byteValue(max),
+	)
+
+	return ret, err
+}
+
+/*
+Increments the score of member in the sorted set stored at key by increment. If
+member does not exist in the sorted set, it is added with increment as its score
+(as if its previous score was 0.0). If key does not exist, a new sorted set with
+the specified member as its sole member is created.
+
+http://redis.io/commands/zincrby
+*/
+func (self *Client) ZIncrBy(key string, increment int64, member string) ([]string, error) {
+	var ret []string
+
+	err := self.command(
+		&ret,
+		[]byte("ZINCRBY"),
+		[]byte(key),
+		byteValue(increment),
+		[]byte(member),
+	)
+
+	return ret, err
+}
+
+/*
+Computes the intersection of numkeys sorted sets given by the specified keys,
+and stores the result in destination. It is mandatory to provide the number of
+input keys (numkeys) before passing the input keys and the other (optional)
+arguments.
+
+http://redis.io/commands/zinterstore
+*/
+func (self *Client) ZInterStore(destination string, numkeys int64, arguments ...interface{}) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(arguments)+3)
+	args[0] = []byte("ZINTERSTORE")
+	args[1] = []byte(destination)
+	args[2] = byteValue(numkeys)
+
+	for i, v := range arguments {
+		args[3+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns the specified range of elements in the sorted set stored at key. The
+elements are considered to be ordered from the lowest to the highest score.
+Lexicographical order is used for elements with equal score.
+
+http://redis.io/commands/zrange
+*/
+func (self *Client) ZRange(key string, values ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(values)+2)
+	args[0] = []byte("ZRANGE")
+	args[1] = []byte(key)
+
+	for i, v := range values {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns all the elements in the sorted set at key with a score between min and
+max (including elements with score equal to min or max). The elements are
+considered to be ordered from low to high scores.
+
+http://redis.io/commands/zrangebyscore
+*/
+func (self *Client) ZRangeByScore(key string, values ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(values)+2)
+	args[0] = []byte("ZRANGEBYSCORE")
+	args[1] = []byte(key)
+
+	for i, v := range values {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns the rank of member in the sorted set stored at key, with the scores
+ordered from low to high. The rank (or index) is 0-based, which means that the
+member with the lowest score has rank 0.
+
+http://redis.io/commands/zrank
+*/
+func (self *Client) ZRank(key string, member string) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("ZRANK"),
+		[]byte(key),
+		[]byte(member),
+	)
+
+	return ret, err
+}
+
+/*
+Removes the specified members from the sorted set stored at key. Non existing
+members are ignored.
+
+http://redis.io/commands/zrem
+*/
+func (self *Client) ZRem(key string, arguments ...interface{}) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("ZREM")
+	args[1] = []byte(key)
+
+	for i, v := range arguments {
+		args[2+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Removes all elements in the sorted set stored at key with rank between start and
+stop. Both start and stop are 0 -based indexes with 0 being the element with the
+lowest score. These indexes can be negative numbers, where they indicate offsets
+starting at the element with the highest score. For example: -1 is the element
+with the highest score, -2 the element with the second highest score and so
+forth.
+
+http://redis.io/commands/zremrangebyrank
+*/
+func (self *Client) ZRemRangeByRank(key string, start int64, stop int64) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("ZREMRANGEBYRANK"),
+		[]byte(key),
+		byteValue(start),
+		byteValue(stop),
+	)
+
+	return ret, err
+}
+
+/*
+Removes all elements in the sorted set stored at key with a score between min
+and max (inclusive).
+
+http://redis.io/commands/zremrangebyscore
+*/
+func (self *Client) ZRemRangeByScore(key string, min int64, max int64) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("ZREMRANGEBYSCORE"),
+		byteValue(min),
+		byteValue(max),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the specified range of elements in the sorted set stored at key. The
+elements are considered to be ordered from the highest to the lowest score.
+Descending lexicographical order is used for elements with equal score.
+
+http://redis.io/commands/zrevrange
+*/
+func (self *Client) ZRevRange(key string, start int64, stop int64, params ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(params)+4)
+	args[0] = []byte("ZREVRANGE")
+	args[1] = []byte(key)
+	args[2] = byteValue(start)
+	args[3] = byteValue(stop)
+
+	for i, v := range params {
+		args[4+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns all the elements in the sorted set at key with a score between max and
+min (including elements with score equal to max or min). In contrary to the
+default ordering of sorted sets, for this command the elements are considered to
+be ordered from high to low scores.
+
+http://redis.io/commands/zrevrangebyscore
+*/
+func (self *Client) ZRevRangeByScore(key string, start int64, stop int64, params ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(params)+4)
+	args[0] = []byte("ZREVRANGEBYSCORE")
+	args[1] = []byte(key)
+	args[2] = byteValue(start)
+	args[3] = byteValue(stop)
+
+	for i, v := range params {
+		args[4+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Returns the rank of member in the sorted set stored at key, with the scores
+ordered from high to low. The rank (or index) is 0-based, which means that the
+member with the highest score has rank 0.
+
+http://redis.io/commands/zrevrank
+*/
+func (self *Client) ZRevRank(key string, member interface{}) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("ZREVRANK"),
+		[]byte(key),
+		byteValue(member),
+	)
+
+	return ret, err
+}
+
+/*
+Returns the score of member in the sorted set at key.
+
+http://redis.io/commands/zscore
+*/
+func (self *Client) ZScore(key string, member interface{}) (int64, error) {
+	var ret int64
+
+	err := self.command(
+		&ret,
+		[]byte("ZSCORE"),
+		[]byte(key),
+		byteValue(member),
+	)
+
+	return ret, err
+}
+
+/*
+Computes the union of numkeys sorted sets given by the specified keys, and
+stores the result in destination. It is mandatory to provide the number of input
+keys (numkeys) before passing the input keys and the other (optional) arguments.
+
+http://redis.io/commands/zunionstore
+*/
+func (self *Client) ZUnionStore(destination string, numkeys int64, key string, params ...interface{}) (int64, error) {
+	var ret int64
+
+	args := make([][]byte, len(params)+4)
+	args[0] = []byte("ZUNIONSTORE")
+	args[1] = []byte(destination)
+	args[2] = byteValue(numkeys)
+	args[3] = []byte(key)
+
+	for i, v := range params {
+		args[4+i] = byteValue(v)
+	}
+
+	err := self.command(&ret, args...)
 
 	return ret, err
 }
