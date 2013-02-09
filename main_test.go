@@ -861,6 +861,155 @@ func TestRange(t *testing.T) {
 	}
 }
 
+func TextHashes(t *testing.T) {
+	var i int64
+	var b bool
+	var s string
+	var ls []string
+	var err error
+
+	// Deleting hash
+	client.Del("myhash")
+
+	// Setting hash value
+	b, err = client.HSet("myhash", "field1", "foo")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == false {
+		t.Fatalf("Failed")
+	}
+
+	// Getting hash value
+	s, err = client.HGet("myhash", "field1")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "foo" {
+		t.Fatalf("Failed")
+	}
+
+	// Getting all hash values
+	ls, err = client.HGetAll("myhash")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting hash value
+	i, err = client.HDel("myhash", "field1")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting non-existent hash value
+	i, err = client.HDel("myhash", "field2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 0 {
+		t.Fatalf("Failed")
+	}
+
+	// Incrementing key value
+	i, err = client.HIncrBy("myhash", "field", 10)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 10 {
+		t.Fatalf("Failed")
+	}
+
+	// Incrementing key value (float)
+	s, err = client.HIncrByFloat("myhash", "field", 1.01)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "11.01" {
+		t.Fatalf("Failed")
+	}
+
+	// Getting all hash keys
+	ls, err = client.HKeys("myhash")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	i, err = client.HLen("myhash")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != int(i) {
+		t.Fatalf("Failed")
+	}
+
+	// Using multi get
+	ls, err = client.HMGet("myhash", "field1", "field2", "nofield")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 3 {
+		t.Fatalf("Failed")
+	}
+
+	// Using multi set
+	s, err = client.HMSet("myhash", "field1", 1, "field2", 2)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	// Non-existent set
+	b, err = client.HSetNX("myhash", "field1", 1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == true {
+		t.Fatalf("Failed")
+	}
+
+	// Getting values
+	ls, err = client.HVals("myhash")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 2 {
+		t.Fatalf("Failed")
+	}
+}
+
 func TestSetBit(t *testing.T) {
 	var err error
 	var i int64

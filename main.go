@@ -893,8 +893,8 @@ func (self *Client) HDel(key string, fields ...string) (int64, error) {
 	args := make([][]byte, len(fields)+1)
 	args[0] = []byte("HDEL")
 
-	for i, field := range fields {
-		args[1+i] = byteValue(field)
+	for i, _ := range fields {
+		args[1+i] = byteValue(fields[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -985,8 +985,8 @@ it is set to 0 before performing the operation.
 
 http://redis.io/commands/hincrbyfloat
 */
-func (self *Client) HIncrByFloat(key string, field string, increment float64) (float64, error) {
-	var ret float64
+func (self *Client) HIncrByFloat(key string, field string, increment float64) (string, error) {
+	var ret string
 
 	err := self.command(
 		&ret,
@@ -1042,11 +1042,12 @@ http://redis.io/commands/hmget
 func (self *Client) HMGet(key string, fields ...string) ([]string, error) {
 	var ret []string
 
-	args := make([][]byte, len(fields)+1)
+	args := make([][]byte, len(fields)+2)
 	args[0] = []byte("HMGET")
+	args[1] = []byte(key)
 
 	for i, field := range fields {
-		args[1+i] = byteValue(field)
+		args[2+i] = byteValue(field)
 	}
 
 	err := self.command(&ret, args...)
@@ -1061,18 +1062,19 @@ a new key holding a hash is created.
 
 http://redis.io/commands/hmset
 */
-func (self *Client) HMSet(key string, values ...string) (string, error) {
+func (self *Client) HMSet(key string, values ...interface{}) (string, error) {
 	var ret string
 
 	if len(values)%2 != 0 {
-		return "", fmt.Errorf("Expecting a field:value pair.")
+		return "", fmt.Errorf("Expecting field -> value pairs.")
 	}
 
-	args := make([][]byte, len(values)+1)
+	args := make([][]byte, len(values)+2)
 	args[0] = []byte("HMSET")
+	args[1] = []byte(key)
 
 	for i, value := range values {
-		args[1+i] = byteValue(value)
+		args[2+i] = byteValue(value)
 	}
 
 	err := self.command(&ret, args...)
@@ -1108,7 +1110,7 @@ exists, this operation has no effect.
 
 http://redis.io/commands/hsetnx
 */
-func (self *Client) HSetNX(key string, field string, value string) (bool, error) {
+func (self *Client) HSetNX(key string, field string, value interface{}) (bool, error) {
 	var ret bool
 
 	err := self.command(
@@ -1116,7 +1118,7 @@ func (self *Client) HSetNX(key string, field string, value string) (bool, error)
 		[]byte("HSETNX"),
 		[]byte(key),
 		[]byte(field),
-		[]byte(value),
+		byteValue(value),
 	)
 
 	return ret, err
