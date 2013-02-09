@@ -1459,8 +1459,8 @@ func (self *Client) MGet(keys ...string) ([]string, error) {
 	args := make([][]byte, len(keys)+1)
 	args[0] = []byte("MGET")
 
-	for i, key := range keys {
-		args[1+i] = []byte(key)
+	for i, _ := range keys {
+		args[1+i] = []byte(keys[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1544,18 +1544,18 @@ operation at all even if just a single key already exists.
 
 http://redis.io/commands/msetnx
 */
-func (self *Client) MSetNX(values ...interface{}) (int64, error) {
-	var ret int64
+func (self *Client) MSetNX(values ...interface{}) (bool, error) {
+	var ret bool
 
 	if len(values)%2 != 0 {
-		return 0, fmt.Errorf("Expecting a field:value pair.")
+		return false, fmt.Errorf("Expecting field -> value pairs.")
 	}
 
 	args := make([][]byte, len(values)+1)
 	args[0] = []byte("MSETNX")
 
-	for i, value := range values {
-		args[1+i] = byteValue(value)
+	for i, _ := range values {
+		args[1+i] = byteValue(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2207,8 +2207,8 @@ for "SET if N ot e X ists".
 
 http://redis.io/commands/setnx
 */
-func (self *Client) SetNX(key string, value interface{}) (string, error) {
-	var ret string
+func (self *Client) SetNX(key string, value interface{}) (bool, error) {
+	var ret bool
 
 	err := self.command(
 		&ret,

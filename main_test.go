@@ -33,28 +33,43 @@ func TestConnect(t *testing.T) {
 }
 
 func TestSet(t *testing.T) {
-	r, err := client.Set("foo", "hello world.")
+	var s string
+	var b bool
+	var err error
+
+	s, err = client.Set("foo", "hello world.")
+
 	if err != nil {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
-	fmt.Printf("SET: %v\n", r)
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	b, err = client.SetNX("foo", "exists!")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == true {
+		t.Fatalf("Failed")
+	}
 }
 
 func TestGet(t *testing.T) {
-	var r string
+	var s string
 	var err error
 
-	r, err = client.Set("foo", "hello")
+	client.Set("foo", "hello")
+
+	s, err = client.Get("foo")
 	if err != nil {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	r, err = client.Get("foo")
-	if err != nil {
-		t.Fatalf("Command failed: %s", err.Error())
-	}
-
-	if r != "hello" {
+	if s != "hello" {
 		t.Errorf("Could not SET/GET value.")
 	}
 }
@@ -79,46 +94,33 @@ func TestSetGetUnicode(t *testing.T) {
 }
 
 func TestDel(t *testing.T) {
-	var r int64
+	var i int64
 	var err error
 
-	r, err = client.Del("counter")
+	client.Set("counter", 0)
+
+	i, err = client.Del("counter")
 
 	if err != nil {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	fmt.Printf("DEL: %v\n", r)
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
 
-	r, err = client.Del("counter")
+	i, err = client.Del("counter")
 
 	if err != nil {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	fmt.Printf("DEL (again): %v\n", r)
+	if i != 0 {
+		t.Fatalf("Failed")
+	}
 }
 
-func TestIncr(t *testing.T) {
-	var r int64
-	var err error
-
-	r, err = client.Incr("counter")
-	if err != nil {
-		t.Fatalf("Command failed: %s", err.Error())
-	}
-	fmt.Printf("INCR: %v\n", r)
-
-	r, err = client.Incr("counter")
-	if err != nil {
-		t.Fatalf("Command failed: %s", err.Error())
-	}
-	fmt.Printf("INCR (again): %v\n", r)
-}
-
-/*
 func TestList(t *testing.T) {
-	var r int64
 	var items []string
 	var err error
 
@@ -129,8 +131,10 @@ func TestList(t *testing.T) {
 	}
 
 	for i := 0; i < 10; i++ {
-		r, err = client.LPush("list", fmt.Sprintf("element-%d", i))
-		fmt.Printf("LPUSH: %v\n", r)
+		_, err = client.LPush("list", fmt.Sprintf("element-%d", i))
+		if err != nil {
+			t.Fatalf("Command failed: %s", err.Error())
+		}
 	}
 
 	items, err = client.LRange("list", 0, -1)
@@ -139,12 +143,11 @@ func TestList(t *testing.T) {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	for _, item := range items {
-		fmt.Printf("LRANGE -> %s\n", item)
+	if len(items) != 10 {
+		t.Fatalf("Failed.")
 	}
 
 }
-*/
 
 func TestAppendGetRange(t *testing.T) {
 	var err error
@@ -431,6 +434,7 @@ func TestDump(t *testing.T) {
 func TestExpire(t *testing.T) {
 	var b bool
 	var i int64
+	var s string
 	var err error
 
 	// Setting key
@@ -571,6 +575,31 @@ func TestExpire(t *testing.T) {
 		t.Fatalf("Failed")
 	}
 
+	// Deleting key
+	client.Del("mykey")
+
+	// Setting value with expiration
+	s, err = client.PSetEx("mykey", 1000, "Hello")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	// Confirming TTL
+	i, err = client.PTTL("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i < 1000 {
+		t.Fatalf("Failed")
+	}
+
 }
 
 func TestRandom(t *testing.T) {
@@ -705,6 +734,7 @@ func TestObject(t *testing.T) {
 }
 
 func TestKeys(t *testing.T) {
+	var b bool
 	var k []string
 	var s string
 	var err error
@@ -744,6 +774,89 @@ func TestKeys(t *testing.T) {
 	}
 
 	if len(k) < 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Getting all keys
+	k, err = client.MGet("one", "two", "three", "four")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(k) != 4 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting keys
+	client.Del("one", "two", "three", "four")
+
+	// Multiple set (NX)
+	b, err = client.MSetNX(
+		"one", 1,
+		"two", 2,
+		"three", 3,
+		"four", 4,
+	)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == false {
+		t.Fatalf("Failed")
+	}
+
+	// Multiple set (NX)
+	b, err = client.MSetNX(
+		"one", 1,
+		"two", 2,
+		"three", 3,
+		"four", 4,
+	)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == true {
+		t.Fatalf("Failed")
+	}
+}
+
+func TestRange(t *testing.T) {
+	var i int64
+	var s string
+	var err error
+
+	// Setting key
+	client.Set("key1", "Hello World")
+
+	// Overwriting range
+	i, err = client.SetRange("key1", 6, "Redis")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 11 {
+		t.Fatalf("Failed")
+	}
+
+	// Verifying
+	s, _ = client.Get("key1")
+
+	if s != "Hello Redis" {
+		t.Fatalf("Failed")
+	}
+
+	i, err = client.Strlen("key1")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 11 {
 		t.Fatalf("Failed")
 	}
 }
