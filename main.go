@@ -90,7 +90,7 @@ func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Dura
 	if ctx == nil {
 		return fmt.Errorf("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		return fmt.Errorf("Could not connect: %s", ctx.errstr)
+		return fmt.Errorf(C.GoString(&ctx.errstr[0]))
 	}
 
 	self.ctx = ctx
@@ -103,50 +103,51 @@ func setReplyValue(v reflect.Value, reply *C.redisReply) error {
 	switch C.redisGetReplyType(reply) {
 	// Received a string.
 	case C.REDIS_REPLY_STRING, C.REDIS_REPLY_STATUS, C.REDIS_REPLY_ERROR:
+		s := C.GoStringN(reply.str, reply.len)
 		// Destination type.
 		switch v.Kind() {
 		case reflect.String:
 			// string -> string
-			v.Set(reflect.ValueOf(C.GoString(reply.str)))
+			v.Set(reflect.ValueOf(s))
 		case reflect.Int:
 			// string -> int
-			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 0)
+			i, _ := strconv.ParseInt(s, 10, 0)
 			v.Set(reflect.ValueOf(int(i)))
 		case reflect.Int8:
 			// string -> int8
-			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 8)
+			i, _ := strconv.ParseInt(s, 10, 8)
 			v.Set(reflect.ValueOf(int8(i)))
 		case reflect.Int16:
 			// string -> int16
-			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 16)
+			i, _ := strconv.ParseInt(s, 10, 16)
 			v.Set(reflect.ValueOf(int16(i)))
 		case reflect.Int32:
 			// string -> int32
-			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 32)
+			i, _ := strconv.ParseInt(s, 10, 32)
 			v.Set(reflect.ValueOf(int32(i)))
 		case reflect.Int64:
 			// string -> int64
-			i, _ := strconv.ParseInt(C.GoString(reply.str), 10, 64)
+			i, _ := strconv.ParseInt(s, 10, 64)
 			v.Set(reflect.ValueOf(int64(i)))
 		case reflect.Uint:
 			// string -> uint
-			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 0)
+			i, _ := strconv.ParseUint(s, 10, 0)
 			v.Set(reflect.ValueOf(uint(i)))
 		case reflect.Uint8:
 			// string -> uint8
-			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 8)
+			i, _ := strconv.ParseUint(s, 10, 8)
 			v.Set(reflect.ValueOf(uint8(i)))
 		case reflect.Uint16:
 			// string -> uint16
-			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 16)
+			i, _ := strconv.ParseUint(s, 10, 16)
 			v.Set(reflect.ValueOf(uint16(i)))
 		case reflect.Uint32:
 			// string -> uint32
-			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 32)
+			i, _ := strconv.ParseUint(s, 10, 32)
 			v.Set(reflect.ValueOf(uint32(i)))
 		case reflect.Uint64:
 			// string -> uint64
-			i, _ := strconv.ParseUint(C.GoString(reply.str), 10, 64)
+			i, _ := strconv.ParseUint(s, 10, 64)
 			v.Set(reflect.ValueOf(uint64(i)))
 		default:
 			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
@@ -178,6 +179,14 @@ func setReplyValue(v reflect.Value, reply *C.redisReply) error {
 			v.Set(reflect.ValueOf(uint32(reply.integer)))
 		case reflect.Uint64:
 			v.Set(reflect.ValueOf(uint64(reply.integer)))
+		case reflect.Bool:
+			b := false
+			if reply.integer == 1 {
+				b = true
+			}
+			v.Set(reflect.ValueOf(b))
+		default:
+			return fmt.Errorf("Unsupported conversion: redis integer to %v", v.Kind())
 		}
 	case C.REDIS_REPLY_ARRAY:
 		switch v.Kind() {
@@ -196,6 +205,8 @@ func setReplyValue(v reflect.Value, reply *C.redisReply) error {
 		default:
 			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
 		}
+	default:
+		return fmt.Errorf("Unknown redis reply type: %v", C.redisGetReplyType(reply))
 	}
 	return nil
 }
@@ -352,14 +363,15 @@ Count the number of set bits (population counting) in a string.
 
 http://redis.io/commands/bitcount
 */
-func (self *Client) BitCount(key string, start int64, end int64) (int64, error) {
+func (self *Client) BitCount(key string, params ...int64) (int64, error) {
 	var ret int64
-	err := self.command(
-		&ret,
-		[]byte("BITCOUNT"),
-		byteValue(start),
-		byteValue(end),
-	)
+	args := make([][]byte, len(params)+2)
+	args[0] = []byte("BITCOUNT")
+	args[1] = []byte(key)
+	for i, _ := range params {
+		args[2+i] = byteValue(params[i])
+	}
+	err := self.command(&ret, args...)
 	return ret, err
 }
 
@@ -369,14 +381,16 @@ and store the result in the destination key.
 
 http://redis.io/commands/bitop
 */
-func (self *Client) BitOp(op string, keys ...string) (int64, error) {
+func (self *Client) BitOp(op string, dest string, keys ...string) (int64, error) {
 	var ret int64
-	args := make([][]byte, len(keys)+1)
+	args := make([][]byte, len(keys)+3)
 	args[0] = []byte("BITOP")
-	for i, key := range keys {
-		args[1+i] = byteValue(key)
+	args[1] = []byte(op)
+	args[2] = []byte(dest)
+	for i, _ := range keys {
+		args[3+i] = byteValue(keys[i])
 	}
-	err := self.command(ret, args...)
+	err := self.command(&ret, args...)
 	return ret, err
 }
 
@@ -399,7 +413,7 @@ func (self *Client) BlPop(timeout uint64, keys ...string) ([]string, error) {
 	}
 	args[1+i] = byteValue(timeout)
 
-	err := self.command(ret, args...)
+	err := self.command(&ret, args...)
 	return ret, err
 }
 
@@ -423,7 +437,7 @@ func (self *Client) BrPop(timeout uint64, keys ...string) ([]string, error) {
 	}
 	args[1+i] = byteValue(timeout)
 
-	err := self.command(ret, args...)
+	err := self.command(&ret, args...)
 	return ret, err
 }
 
@@ -615,7 +629,7 @@ func (self *Client) Decr(key string) (int64, error) {
 	err := self.command(
 		&ret,
 		[]byte("DECR"),
-		byteValue(key),
+		[]byte(key),
 	)
 	return ret, err
 }
@@ -633,7 +647,7 @@ func (self *Client) DecrBy(key string, decrement int64) (int64, error) {
 	err := self.command(
 		&ret,
 		[]byte("DECRBY"),
-		byteValue(key),
+		[]byte(key),
 		byteValue(decrement),
 	)
 	return ret, err
@@ -683,7 +697,7 @@ func (self *Client) Dump(key string) (string, error) {
 	err := self.command(
 		&ret,
 		[]byte("DUMP"),
-		byteValue(key),
+		[]byte(key),
 	)
 	return ret, err
 }
@@ -745,7 +759,7 @@ func (self *Client) Expire(key string, seconds uint64) (bool, error) {
 	err := self.command(
 		&ret,
 		[]byte("EXPIRE"),
-		byteValue(key),
+		[]byte(key),
 		byteValue(seconds),
 	)
 	return ret, err
@@ -763,7 +777,7 @@ func (self *Client) ExpireAt(key string, unixTime uint64) (bool, error) {
 	err := self.command(
 		&ret,
 		[]byte("EXPIREAT"),
-		byteValue(key),
+		[]byte(key),
 		byteValue(unixTime),
 	)
 	return ret, err
@@ -808,8 +822,8 @@ http://redis.io/commands/get
 func (self *Client) Get(key string) (string, error) {
 	var s string
 	err := self.command(&s,
-		[]byte(string("GET")),
-		byteValue(key),
+		[]byte("GET"),
+		[]byte(key),
 	)
 	return s, err
 }
@@ -820,13 +834,14 @@ Returns the bit value at offset in the string value stored at key.
 http://redis.io/commands/getbit
 */
 func (self *Client) GetBit(key string, offset int64) (int64, error) {
-	var s int64
-	err := self.command(&s,
-		[]byte(string("GETBIT")),
-		byteValue(key),
+	var ret int64
+	err := self.command(
+		&ret,
+		[]byte("GETBIT"),
+		[]byte(key),
 		byteValue(offset),
 	)
-	return s, err
+	return ret, err
 }
 
 /*
@@ -837,11 +852,11 @@ the last character, -2 the penultimate and so forth.
 
 http://redis.io/commands/getrange
 */
-func (self *Client) GetRange(key string, start int64, end int64) ([]string, error) {
-	var ret []string
+func (self *Client) GetRange(key string, start int64, end int64) (string, error) {
+	var ret string
 	err := self.command(&ret,
 		[]byte("GETRANGE"),
-		byteValue(key),
+		[]byte(key),
 		byteValue(start),
 		byteValue(end),
 	)
@@ -1132,12 +1147,12 @@ integer. This operation is limited to 64 bit signed integers.
 
 http://redis.io/commands/incr
 */
-func (self *Client) Incr(name string) (int64, error) {
+func (self *Client) Incr(key string) (int64, error) {
 	var ret int64
 	err := self.command(
 		&ret,
 		[]byte("INCR"),
-		[]byte(name),
+		[]byte(key),
 	)
 	return ret, err
 }
@@ -1150,12 +1165,12 @@ represented as integer. This operation is limited to 64 bit signed integers.
 
 http://redis.io/commands/incrby
 */
-func (self *Client) IncrBy(name string, increment int64) (int64, error) {
+func (self *Client) IncrBy(key string, increment int64) (int64, error) {
 	var ret int64
 	err := self.command(
 		&ret,
 		[]byte("INCRBY"),
-		[]byte(name),
+		[]byte(key),
 		byteValue(increment),
 	)
 	return ret, err
@@ -1168,12 +1183,12 @@ performing the operation.
 
 http://redis.io/commands/incrbyfloat
 */
-func (self *Client) IncrByFloat(name string, increment float64) (float64, error) {
-	var ret float64
+func (self *Client) IncrByFloat(key string, increment float64) (string, error) {
+	var ret string
 	err := self.command(
 		&ret,
 		[]byte("INCRBYFLOAT"),
-		[]byte(name),
+		[]byte(key),
 		byteValue(increment),
 	)
 	return ret, err
@@ -1484,8 +1499,8 @@ use MOVE as a locking primitive because of this.
 
 http://redis.io/commands/move
 */
-func (self *Client) Move(key string, db string) (int64, error) {
-	var ret int64
+func (self *Client) Move(key string, db string) (bool, error) {
+	var ret bool
 
 	err := self.command(
 		&ret,
@@ -1504,18 +1519,18 @@ existing values.
 
 http://redis.io/commands/mset
 */
-func (self *Client) MSet(values ...interface{}) (int64, error) {
-	var ret int64
+func (self *Client) MSet(values ...interface{}) (string, error) {
+	var ret string
 
 	if len(values)%2 != 0 {
-		return 0, fmt.Errorf("Expecting a field:value pair.")
+		return "", fmt.Errorf("Expecting field -> value pairs.")
 	}
 
 	args := make([][]byte, len(values)+1)
 	args[0] = []byte("MSET")
 
-	for i, value := range values {
-		args[1+i] = byteValue(value)
+	for i, _ := range values {
+		args[1+i] = byteValue(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1574,8 +1589,8 @@ key eviction policies when using Redis as a Cache.
 
 http://redis.io/commands/object
 */
-func (self *Client) Object(subcommand string, arguments ...interface{}) ([]string, error) {
-	var ret []string
+func (self *Client) Object(subcommand string, arguments ...interface{}) (string, error) {
+	var ret string
 
 	args := make([][]byte, len(arguments)+2)
 	args[0] = []byte("OBJECT")
@@ -1711,7 +1726,7 @@ time in seconds while PTTL returns it in milliseconds.
 
 http://redis.io/commands/pttl
 */
-func (self *Client) Pttl(key string) (int64, error) {
+func (self *Client) PTTL(key string) (int64, error) {
 	var ret int64
 
 	err := self.command(
@@ -1802,8 +1817,8 @@ overwritten.
 
 http://redis.io/commands/rename
 */
-func (self *Client) Rename(key string, newkey string) (bool, error) {
-	var ret bool
+func (self *Client) Rename(key string, newkey string) (string, error) {
+	var ret string
 
 	err := self.command(
 		&ret,
@@ -1901,11 +1916,12 @@ http://redis.io/commands/rpush
 func (self *Client) RPush(key string, values ...interface{}) (int64, error) {
 	var ret int64
 
-	args := make([][]byte, len(values)+1)
+	args := make([][]byte, len(values)+2)
 	args[0] = []byte("RPUSH")
+	args[1] = []byte(key)
 
-	for i, v := range values {
-		args[1+i] = byteValue(v)
+	for i, _ := range values {
+		args[2+i] = byteValue(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1920,8 +1936,8 @@ does not yet exist.
 
 http://redis.io/commands/rpushx
 */
-func (self *Client) RPushX(key string, value interface{}) (string, error) {
-	var ret string
+func (self *Client) RPushX(key string, value interface{}) (int64, error) {
+	var ret int64
 
 	err := self.command(
 		&ret,
@@ -2150,8 +2166,8 @@ Sets or clears the bit at offset in the string value stored at key.
 
 http://redis.io/commands/setbit
 */
-func (self *Client) SetBit(key string, offset int64, value int) (int, error) {
-	var ret int
+func (self *Client) SetBit(key string, offset int64, value int64) (int64, error) {
+	var ret int64
 
 	err := self.command(
 		&ret,
@@ -2377,12 +2393,12 @@ http://redis.io/commands/sort
 func (self *Client) Sort(key string, arguments ...string) ([]string, error) {
 	var ret []string
 
-	args := make([][]byte, len(arguments)+1)
+	args := make([][]byte, len(arguments)+2)
 	args[0] = []byte("SORT")
 	args[1] = []byte(key)
 
-	for i, v := range arguments {
-		args[2+i] = byteValue(v)
+	for i, _ := range arguments {
+		args[2+i] = byteValue(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2569,7 +2585,7 @@ key will continue to be part of the dataset.
 
 http://redis.io/commands/ttl
 */
-func (self *Client) Ttl(key string) (int64, error) {
+func (self *Client) TTL(key string) (int64, error) {
 	var ret int64
 
 	err := self.command(

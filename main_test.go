@@ -11,16 +11,25 @@ var port = uint(6379)
 var client *Client
 
 func TestConnect(t *testing.T) {
+	var s string
+	var err error
+
 	client = New()
-	err := client.ConnectWithTimeout(host, port, time.Second*1)
+
+	err = client.ConnectWithTimeout(host, port, time.Second*1)
 	if err != nil {
-		t.Fatalf("Connect failed: %s", err.Error())
+		t.Fatalf("Connect failed: %v", err)
 	}
-	r, err := client.Ping()
+
+	s, err = client.Ping()
+
 	if err != nil {
-		t.Fatalf("Command failed: %s", err.Error())
+		t.Fatalf("Command failed: %v", err)
 	}
-	fmt.Printf("PING: %v\n", r)
+
+	if s != "PONG" {
+		t.Fatalf("Failed")
+	}
 }
 
 func TestSet(t *testing.T) {
@@ -107,6 +116,7 @@ func TestIncr(t *testing.T) {
 	fmt.Printf("INCR (again): %v\n", r)
 }
 
+/*
 func TestList(t *testing.T) {
 	var r int64
 	var items []string
@@ -134,7 +144,670 @@ func TestList(t *testing.T) {
 	}
 
 }
+*/
 
+func TestAppendGetRange(t *testing.T) {
+	var err error
+	var s string
+	var b bool
+	var i int64
+
+	_, err = client.Del("mykey")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	b, err = client.Exists("mykey")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if b == true {
+		t.Fatalf("Failed.")
+	}
+
+	i, err = client.Append("mykey", "Hello")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 5 {
+		t.Fatalf("Failed.")
+	}
+
+	i, err = client.Append("mykey", " World")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 11 {
+		t.Fatalf("Failed.")
+	}
+
+	s, err = client.Get("mykey")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "Hello World" {
+		t.Fatalf("Failed.")
+	}
+
+	_, err = client.Del("ts")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	_, err = client.Append("ts", "0043")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	_, err = client.Append("ts", "0035")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	s, err = client.GetRange("ts", 0, 3)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "0043" {
+		t.Fatalf("Failed.")
+	}
+
+	s, err = client.GetRange("ts", 4, 7)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "0035" {
+		t.Fatalf("Failed.")
+	}
+}
+
+func TestBitCount(t *testing.T) {
+	var err error
+	var i int64
+
+	_, err = client.Set("mykey", "foobar")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	i, err = client.BitCount("mykey")
+
+	if i != 26 {
+		t.Fatalf("Failed.")
+	}
+
+	i, err = client.BitCount("mykey", 0, 0)
+
+	if i != 4 {
+		t.Fatalf("Failed.")
+	}
+
+	i, err = client.BitCount("mykey", 1, 1)
+
+	if i != 6 {
+		t.Fatalf("Failed.")
+	}
+
+}
+
+func TestIncrDecr(t *testing.T) {
+	var i int64
+	var err error
+	var s string
+
+	// -> 0
+	client.Set("counter", 0)
+
+	// -> 1
+	client.Incr("counter")
+
+	err = client.Command(&i, "GET", "counter")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// -> 1 + 10
+	client.IncrBy("counter", 10)
+
+	s, err = client.Get("counter")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "11" {
+		t.Fatalf("Failed")
+	}
+
+	// -> 11 - 1
+	i, err = client.Decr("counter")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	// 10 - 6
+	i, err = client.DecrBy("counter", 6)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 4 {
+		t.Fatalf("Failed")
+	}
+
+	s, err = client.IncrByFloat("counter", 0.01)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "4.01" {
+		t.Fatalf("Failed")
+	}
+
+	s, err = client.IncrByFloat("counter", -0.02)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "3.99" {
+		t.Fatalf("Failed")
+	}
+}
+
+func TestDump(t *testing.T) {
+	var s string
+	var d string
+	var ls []string
+	var i int64
+	var err error
+
+	// Deleting key
+	client.Del("mykey")
+
+	// Trying to RPUSHX, but key does not exists.
+	i, err = client.RPushX("mykey", 3)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 0 {
+		t.Fatalf("Failed")
+	}
+
+	// Pushing 1, 2
+	i, err = client.RPush("mykey", 1, 2)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Pushing 3
+	i, err = client.RPushX("mykey", 3)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 3 {
+		t.Fatalf("Failed")
+	}
+
+	// Generating a dump
+	d, err = client.Dump("mykey")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	// Deleting key
+	client.Del("mykey")
+
+	// Restoring key from dump.
+	s, err = client.Restore("mykey", 0, d)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	// Key type
+	s, err = client.Type("mykey")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if s != "list" {
+		t.Fatalf("Failed")
+	}
+
+	// Getting values.
+	ls, err = client.LRange("mykey", 0, -1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 3 {
+		t.Fatalf("Failed")
+	}
+
+}
+
+func TestExpire(t *testing.T) {
+	var b bool
+	var i int64
+	var err error
+
+	// Setting key
+	client.Set("mykey", "Hello")
+
+	// Setting expiration
+	b, err = client.Expire("mykey", 10)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != true {
+		t.Fatalf("Failed")
+	}
+
+	// Checking time to live
+	i, err = client.TTL("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 10 {
+		t.Fatalf("Failed")
+	}
+
+	// Making key persistent
+	b, err = client.Persist("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != true {
+		t.Fatalf("Failed")
+	}
+
+	// Checking time to live
+	i, err = client.TTL("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != -1 {
+		t.Fatalf("Failed")
+	}
+
+	// Checking if the key exists
+	b, err = client.Exists("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != true {
+		t.Fatalf("Failed")
+	}
+
+	// Setting past expiration
+	b, err = client.ExpireAt("mykey", 1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != true {
+		t.Fatalf("Failed")
+	}
+
+	// Checking if the key exists
+	b, err = client.Exists("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != false {
+		t.Fatalf("Failed")
+	}
+
+	// Creating key
+	client.Set("mykey", "Hello")
+
+	// Setting expiration (ms)
+	b, err = client.PExpire("mykey", 1500)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == false {
+		t.Fatalf("Failed")
+	}
+
+	// Checking time to live
+	i, err = client.TTL("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i < 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Checking time to live (ms)
+	i, err = client.PTTL("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i < 1000 {
+		t.Fatalf("Failed")
+	}
+
+	// Setting past expiration
+	b, err = client.PExpireAt("mykey", 1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != true {
+		t.Fatalf("Failed")
+	}
+
+	// Checking if the key exists
+	b, err = client.Exists("mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == true {
+		t.Fatalf("Failed")
+	}
+
+}
+
+func TestRandom(t *testing.T) {
+	var s string
+	var err error
+
+	// Getting a random key
+	s, err = client.RandomKey()
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(s) == 0 {
+		t.Fatalf("Failed")
+	}
+}
+
+func TestRename(t *testing.T) {
+	var s string
+	var b bool
+	var err error
+
+	// Setting key
+	client.Set("mykey", "Hello")
+
+	// Renaming
+	s, err = client.Rename("mykey", "myotherkey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	// Getting value
+	s, err = client.Get("myotherkey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "Hello" {
+		t.Fatalf("Failed")
+	}
+
+	// Setting key
+	client.Set("mykey", "taken")
+
+	// Renaming if not exists, but it does.
+	b, err = client.RenameNX("myotherkey", "mykey")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b == true {
+		t.Fatalf("Failed")
+	}
+
+}
+
+func TestSort(t *testing.T) {
+	var el []string
+	var err error
+
+	// Deleting key
+	client.Del("mylist")
+
+	// Pushing stuff into key
+	client.LPush("mylist", 5)
+	client.LPush("mylist", 1)
+	client.LPush("mylist", 4)
+	client.LPush("mylist", -1)
+	client.LPush("mylist", 9)
+
+	// Sorting
+	el, err = client.Sort("mylist")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(el) != 5 {
+		t.Fatalf("Failed")
+	}
+
+	if el[0] != "-1" {
+		t.Fatalf("Failed")
+	}
+
+}
+
+func TestObject(t *testing.T) {
+	var s string
+	var i int64
+	var err error
+
+	client.Del("mylist")
+
+	i, err = client.LPush("mylist", "Hello world")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	s, err = client.Object("refcount", "mylist")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "1" {
+		t.Fatalf("Failed")
+	}
+
+	s, err = client.Object("encoding", "mylist")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "ziplist" {
+		t.Fatalf("Failed")
+	}
+}
+
+func TestKeys(t *testing.T) {
+	var k []string
+	var s string
+	var err error
+
+	// Multiple set
+	s, err = client.MSet(
+		"one", 1,
+		"two", 2,
+		"three", 3,
+		"four", 4,
+	)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	// Getting "o" keys
+	k, err = client.Keys("*o*")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(k) < 3 {
+		t.Fatalf("Failed")
+	}
+
+	// Getting "t" keys
+	k, err = client.Keys("t??")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(k) < 1 {
+		t.Fatalf("Failed")
+	}
+}
+
+func TestSetBit(t *testing.T) {
+	var err error
+	var i int64
+
+	client.Del("mykey")
+
+	_, err = client.SetBit("mykey", 7, 1)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	i, err = client.GetBit("mykey", 0)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 0 {
+		t.Fatalf("Failed")
+	}
+
+	i, err = client.GetBit("mykey", 7)
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+}
+
+func TestBitOp(t *testing.T) {
+	var err error
+	var s string
+	var i int64
+
+	client.Set("key1", "foobar")
+	client.Set("key2", "foobax")
+
+	i, err = client.BitOp("AND", "dest", "key1", "key2")
+
+	if err != nil {
+		t.Fatalf("Error: %s", err.Error())
+	}
+
+	if i != 6 {
+		t.Fatalf("Failed.")
+	}
+
+	s, err = client.Get("dest")
+
+	if s != "foobap" {
+		t.Fatalf("Failed.")
+	}
+
+}
+
+/*
 func TestRawList(t *testing.T) {
 	var r int
 	var items []int
@@ -178,3 +851,4 @@ func TestRawList(t *testing.T) {
 	}
 
 }
+*/
