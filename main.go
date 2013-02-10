@@ -580,7 +580,8 @@ func (self *Client) ClientKill(ip string, port uint) (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("CLIENT KILL"),
+		[]byte("CLIENT"),
+		[]byte("KILL"),
 		byteValue(fmt.Sprintf("%s:%d", ip, port)),
 	)
 	return ret, err
@@ -596,7 +597,8 @@ func (self *Client) ClientList() ([]string, error) {
 	var ret []string
 	err := self.command(
 		&ret,
-		[]byte("CLIENT LIST"),
+		[]byte("CLIENT"),
+		[]byte("LIST"),
 	)
 	return ret, err
 }
@@ -612,7 +614,8 @@ func (self *Client) ClientGetName() (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("CLIENT GETNAME"),
+		[]byte("CLIENT"),
+		[]byte("GETNAME"),
 	)
 	return ret, err
 }
@@ -626,7 +629,8 @@ func (self *Client) ClientSetName(connectionName string) (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("CLIENT SETNAME"),
+		[]byte("CLIENT"),
+		[]byte("SETNAME"),
 		byteValue(connectionName),
 	)
 	return ret, err
@@ -643,8 +647,9 @@ func (self *Client) ConfigGet(parameter string) (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("CONFIG GET"),
-		byteValue(parameter),
+		[]byte("CONFIG"),
+		[]byte("GET"),
+		[]byte(parameter),
 	)
 	return ret, err
 }
@@ -660,8 +665,9 @@ func (self *Client) ConfigSet(parameter string, value interface{}) (string, erro
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("CONFIG SET"),
-		byteValue(parameter),
+		[]byte("CONFIG"),
+		[]byte("SET"),
+		[]byte(parameter),
 		byteValue(value),
 	)
 	return ret, err
@@ -676,7 +682,8 @@ func (self *Client) ConfigResetStat() (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("CONFIG RESETSTAT"),
+		[]byte("CONFIG"),
+		[]byte("RESETSTAT"),
 	)
 	return ret, err
 }
@@ -817,7 +824,7 @@ Returns message.
 
 http://redis.io/commands/echo
 */
-func (self *Client) Echo(message string) (string, error) {
+func (self *Client) Echo(message interface{}) (string, error) {
 	var ret string
 	err := self.command(
 		&ret,

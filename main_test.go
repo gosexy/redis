@@ -1015,7 +1015,7 @@ func TestPublish(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	var ls []string
+	//var ls []string
 	var err error
 
 	consumer := New()
@@ -1035,9 +1035,10 @@ func TestSubscriptions(t *testing.T) {
 
 	// Waiting for messages
 	for i := 0; i < 5; i++ {
-		ls = <-rec
+		<-rec
+		//ls = <-rec
 		//_ = ls
-		fmt.Printf("ls %v\n", ls)
+		//fmt.Printf("ls %v\n", ls)
 	}
 
 	consumer.Unsubscribe("channel")
@@ -1047,7 +1048,7 @@ func TestSubscriptions(t *testing.T) {
 }
 
 func TestPSubscriptions(t *testing.T) {
-	var ls []string
+	//var ls []string
 	var err error
 
 	consumer := New()
@@ -1066,9 +1067,10 @@ func TestPSubscriptions(t *testing.T) {
 	go TestPublish(t)
 
 	for i := 0; i < 5; i++ {
-		ls = <-rec
+		<-rec
+		//ls = <-rec
 		//_ = ls
-		fmt.Printf("ls %v\n", ls)
+		//fmt.Printf("ls %v\n", ls)
 	}
 
 	consumer.PUnsubscribe("channel")
@@ -1845,14 +1847,11 @@ func TestBitOp(t *testing.T) {
 
 }
 
-/*
 func TestRawList(t *testing.T) {
 	var r int
 	var items []int
 	var sitems []string
 	var err error
-
-	fmt.Printf("Raw commands\n")
 
 	err = client.Command(nil, "DEL", "list")
 
@@ -1865,7 +1864,9 @@ func TestRawList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Command failed: %s", err.Error())
 		}
-		fmt.Printf("LPUSH: %v\n", r)
+		if r == 0 {
+			t.Fatalf("Failed")
+		}
 	}
 
 	err = client.Command(&items, "LRANGE", "list", 0, -1)
@@ -1874,8 +1875,8 @@ func TestRawList(t *testing.T) {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	for _, item := range items {
-		fmt.Printf("LRANGE -> %d\n", item)
+	if len(items) != 10 {
+		t.Fatalf("Failed")
 	}
 
 	err = client.Command(&sitems, "LRANGE", "list", 0, -1)
@@ -1884,9 +1885,8 @@ func TestRawList(t *testing.T) {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	for _, sitem := range sitems {
-		fmt.Printf("LRANGE -> %s\n", sitem)
+	if len(sitems) != 10 {
+		t.Fatalf("Failed")
 	}
 
 }
-*/
