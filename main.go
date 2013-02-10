@@ -2178,6 +2178,29 @@ func (self *Client) ScriptKill() (string, error) {
 }
 
 /*
+EVAL and EVALSHA are used to evaluate scripts using the Lua interpreter built
+into Redis starting from version 2.6.0.
+
+http://redis.io/commands/eval
+*/
+func (self *Client) Eval(script string, numkeys int64, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(key)+3)
+	args[0] = []byte("EVAL")
+	agrs[1] = []byte(script)
+	args[2] = byteValue(numkeys)
+
+	for i, _ := range arguments {
+		args[3+i] = byteValue(arguments[i])
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
 Load a script into the scripts cache, without executing it. After the specified
 command is loaded into the script cache it will be callable using EVALSHA with
 the correct SHA1 digest of the script, exactly like after the first successful
