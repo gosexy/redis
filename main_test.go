@@ -596,7 +596,7 @@ func TestExpire(t *testing.T) {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	if i < 1000 {
+	if i < 100 {
 		t.Fatalf("Failed")
 	}
 
@@ -770,6 +770,222 @@ func TestSet(t *testing.T) {
 	}
 
 	if i != 4 {
+		t.Fatalf("Failed")
+	}
+
+}
+
+func TestZSet(t *testing.T) {
+	var i int64
+	var s string
+	var ls []string
+	var err error
+
+	// Deleting
+	client.Del("myset")
+
+	// Adding
+	i, err = client.ZAdd("myset", 1, "one", 2, "teo")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Counting elements
+	i, err = client.ZCard("myset")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Counting elements
+	i, err = client.ZCount("myset", "-inf", "+inf")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Increment
+	s, err = client.ZIncrBy("myset", 1, "one")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "2" {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting
+	client.Del("zset1", "zset2")
+
+	// Adding
+	client.ZAdd("zset1", 1, "one", 2, "two")
+	client.ZAdd("zset2", 1, "one", 2, "two", 3, "three")
+
+	// Intersection
+	i, err = client.ZInterStore("out", 2, "zset1", "zset2", "WEIGHTS", 2, 3)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Range
+	ls, err = client.ZRange("out", 0, -1, "WITHSCORES")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 4 {
+		t.Fatalf("Failed")
+	}
+
+	// Adding
+	client.Del("myzset")
+	client.ZAdd("myzset", 1, "one", 2, "two", 3, "three")
+
+	// Range
+	ls, err = client.ZRangeByScore("myzset", 1, 2)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Rank
+	i, err = client.ZRank("myzset", "two")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Reverse Rank
+	i, err = client.ZRevRank("myzset", "one")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Reverse Rank
+	i, err = client.ZRevRank("myzset", "none")
+
+	if err == nil {
+		t.Fatalf("Expecting error.")
+	}
+
+	// Remove
+	i, err = client.ZRem("myzset", "two", "three")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Remove
+	i, err = client.ZRemRangeByRank("myzset", 0, 1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Adding
+	client.Del("myzset")
+	client.ZAdd("myzset", 1, "one", 2, "two", 3, "three")
+
+	// Remove
+	i, err = client.ZRemRangeByScore("myzset", "-inf", "(2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Range
+	ls, err = client.ZRevRange("myzset", 0, -1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Range
+	ls, err = client.ZRevRangeByScore("myzset", "+inf", "-inf")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Score
+	i, err = client.ZScore("myzset", "two")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting
+	client.Del("zset1", "zset2")
+
+	// Adding
+	client.ZAdd("zset1", 1, "one", 2, "two")
+	client.ZAdd("zset2", 1, "one", 2, "two", 3, "three")
+
+	// Intersection
+	i, err = client.ZUnionStore("out", 2, "zset1", "zset2", "WEIGHTS", 2, 3)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 3 {
 		t.Fatalf("Failed")
 	}
 

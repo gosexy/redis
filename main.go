@@ -205,6 +205,9 @@ func setReplyValue(v reflect.Value, reply *C.redisReply) error {
 		default:
 			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
 		}
+	case C.REDIS_REPLY_NIL:
+		v.Set(reflect.Zero(v.Type()))
+		return fmt.Errorf("Received NIL response.")
 	default:
 		return fmt.Errorf("Unknown redis reply type: %v", C.redisGetReplyType(reply))
 	}
@@ -2695,8 +2698,8 @@ func (self *Client) ZAdd(key string, arguments ...interface{}) (int64, error) {
 	args[0] = []byte("ZADD")
 	args[1] = []byte(key)
 
-	for i, v := range arguments {
-		args[2+i] = byteValue(v)
+	for i, _ := range arguments {
+		args[2+i] = byteValue(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2749,15 +2752,15 @@ the specified member as its sole member is created.
 
 http://redis.io/commands/zincrby
 */
-func (self *Client) ZIncrBy(key string, increment int64, member string) ([]string, error) {
-	var ret []string
+func (self *Client) ZIncrBy(key string, increment int64, member interface{}) (string, error) {
+	var ret string
 
 	err := self.command(
 		&ret,
 		[]byte("ZINCRBY"),
 		[]byte(key),
 		byteValue(increment),
-		[]byte(member),
+		byteValue(member),
 	)
 
 	return ret, err
@@ -2779,8 +2782,8 @@ func (self *Client) ZInterStore(destination string, numkeys int64, arguments ...
 	args[1] = []byte(destination)
 	args[2] = byteValue(numkeys)
 
-	for i, v := range arguments {
-		args[3+i] = byteValue(v)
+	for i, _ := range arguments {
+		args[3+i] = byteValue(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2825,8 +2828,8 @@ func (self *Client) ZRangeByScore(key string, values ...interface{}) ([]string, 
 	args[0] = []byte("ZRANGEBYSCORE")
 	args[1] = []byte(key)
 
-	for i, v := range values {
-		args[2+i] = byteValue(v)
+	for i, _ := range values {
+		args[2+i] = byteValue(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2841,14 +2844,14 @@ member with the lowest score has rank 0.
 
 http://redis.io/commands/zrank
 */
-func (self *Client) ZRank(key string, member string) (int64, error) {
+func (self *Client) ZRank(key string, member interface{}) (int64, error) {
 	var ret int64
 
 	err := self.command(
 		&ret,
 		[]byte("ZRANK"),
 		[]byte(key),
-		[]byte(member),
+		byteValue(member),
 	)
 
 	return ret, err
@@ -2867,8 +2870,8 @@ func (self *Client) ZRem(key string, arguments ...interface{}) (int64, error) {
 	args[0] = []byte("ZREM")
 	args[1] = []byte(key)
 
-	for i, v := range arguments {
-		args[2+i] = byteValue(v)
+	for i, _ := range arguments {
+		args[2+i] = byteValue(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2886,7 +2889,7 @@ forth.
 
 http://redis.io/commands/zremrangebyrank
 */
-func (self *Client) ZRemRangeByRank(key string, start int64, stop int64) (int64, error) {
+func (self *Client) ZRemRangeByRank(key string, start interface{}, stop interface{}) (int64, error) {
 	var ret int64
 
 	err := self.command(
@@ -2906,12 +2909,13 @@ and max (inclusive).
 
 http://redis.io/commands/zremrangebyscore
 */
-func (self *Client) ZRemRangeByScore(key string, min int64, max int64) (int64, error) {
+func (self *Client) ZRemRangeByScore(key string, min interface{}, max interface{}) (int64, error) {
 	var ret int64
 
 	err := self.command(
 		&ret,
 		[]byte("ZREMRANGEBYSCORE"),
+		[]byte(key),
 		byteValue(min),
 		byteValue(max),
 	)
@@ -2952,7 +2956,7 @@ be ordered from high to low scores.
 
 http://redis.io/commands/zrevrangebyscore
 */
-func (self *Client) ZRevRangeByScore(key string, start int64, stop int64, params ...interface{}) ([]string, error) {
+func (self *Client) ZRevRangeByScore(key string, start interface{}, stop interface{}, params ...interface{}) ([]string, error) {
 	var ret []string
 
 	args := make([][]byte, len(params)+4)
@@ -2961,8 +2965,8 @@ func (self *Client) ZRevRangeByScore(key string, start int64, stop int64, params
 	args[2] = byteValue(start)
 	args[3] = byteValue(stop)
 
-	for i, v := range params {
-		args[4+i] = byteValue(v)
+	for i, _ := range params {
+		args[4+i] = byteValue(params[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -3024,8 +3028,8 @@ func (self *Client) ZUnionStore(destination string, numkeys int64, key string, p
 	args[2] = byteValue(numkeys)
 	args[3] = []byte(key)
 
-	for i, v := range params {
-		args[4+i] = byteValue(v)
+	for i, _ := range params {
+		args[4+i] = byteValue(params[i])
 	}
 
 	err := self.command(&ret, args...)
