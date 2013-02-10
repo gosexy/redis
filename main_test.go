@@ -1010,6 +1010,226 @@ func TextHashes(t *testing.T) {
 	}
 }
 
+func TestLists(t *testing.T) {
+	var ls []string
+	var s string
+	var i int64
+	var err error
+
+	// Deleting lists
+	client.Del("list1", "list2")
+
+	client.RPush("list1", "a", "b", "c")
+	client.RPush("list2", "a", "b", "c")
+
+	// Blocking LPOP
+	ls, err = client.BLPop(0, "list1", "list2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) == 0 {
+		t.Fatalf("Failed")
+	}
+
+	// Blocking RPOP
+	ls, err = client.BRPop(0, "list1", "list2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) == 0 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting lists
+	client.Del("list1", "list2")
+
+	// Pushing
+	client.RPush("list1", "a", "b", "c")
+
+	// RPop and LPush
+	s, err = client.RPopLPush("list1", "list2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "c" {
+		t.Fatalf("Failed")
+	}
+
+	// Checking second key
+	ls, err = client.LRange("list2", 0, -1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting lists
+	client.Del("list1", "list2")
+
+	// Pushing
+	client.RPush("list1", "a", "b", "c")
+
+	// RPop and LPush
+	s, err = client.BRPopLPush("list1", "list2", 10)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "c" {
+		t.Fatalf("Failed")
+	}
+
+	// Checking second key
+	ls, err = client.LRange("list2", 0, -1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting lists
+	client.Del("list1", "list2")
+
+	// Pushing
+	client.LPush("list1", "a", "b", "c")
+
+	// Getting list element by index
+	s, err = client.LIndex("list1", 1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "b" {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting lists
+	client.Del("list1", "list2")
+
+	// Pushing
+	client.RPush("list1", "Hello", "World")
+
+	// Inserting
+	i, err = client.LInsert("list1", "BEFORE", "World", "There")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 3 {
+		t.Fatalf("Failed")
+	}
+
+	// List pop
+	s, err = client.LPop("list1")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "Hello" {
+		t.Fatalf("Failed")
+	}
+
+	// List Length
+	i, err = client.LLen("list1")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// List pop
+	i, err = client.LPushX("list1", "Hello")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 3 {
+		t.Fatalf("Failed")
+	}
+
+	// Removing equal
+	i, err = client.LRem("list1", 0, "World")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Setting by index
+	s, err = client.LSet("list1", 1, "World")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting lists
+	client.Del("mylist")
+
+	// Pushing
+	client.RPush("mylist", "one", "two", "three")
+
+	// Trimming
+	s, err = client.LTrim("mylist", 1, -1)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "OK" {
+		t.Fatalf("Failed")
+	}
+
+	// Popping
+	s, err = client.RPop("mylist")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "three" {
+		t.Fatalf("Failed")
+	}
+
+	// RPop and LPush
+	s, err = client.RPopLPush("mylist", "list2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s != "two" {
+		t.Fatalf("Failed")
+	}
+
+}
+
 func TestSetBit(t *testing.T) {
 	var err error
 	var i int64

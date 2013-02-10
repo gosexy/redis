@@ -402,7 +402,7 @@ non-empty, with the given keys being checked in the order that they are given.
 
 http://redis.io/commands/blpop
 */
-func (self *Client) BlPop(timeout uint64, keys ...string) ([]string, error) {
+func (self *Client) BLPop(timeout uint64, keys ...string) ([]string, error) {
 	var i int
 	var ret []string
 	args := make([][]byte, len(keys)+2)
@@ -411,6 +411,7 @@ func (self *Client) BlPop(timeout uint64, keys ...string) ([]string, error) {
 	for i, key := range keys {
 		args[1+i] = byteValue(key)
 	}
+
 	args[1+i] = byteValue(timeout)
 
 	err := self.command(&ret, args...)
@@ -425,7 +426,7 @@ non-empty, with the given keys being checked in the order that they are given.
 
 http://redis.io/commands/brpop
 */
-func (self *Client) BrPop(timeout uint64, keys ...string) ([]string, error) {
+func (self *Client) BRPop(timeout uint64, keys ...string) ([]string, error) {
 	var i int
 	var ret []string
 
@@ -449,13 +450,13 @@ reached. A timeout of zero can be used to block indefinitely.
 
 http://redis.io/commands/brpoplpush
 */
-func (self *Client) BrPopLPush(source string, destination string, timeout int64) ([]string, error) {
-	var ret []string
+func (self *Client) BRPopLPush(source string, destination string, timeout int64) (string, error) {
+	var ret string
 	err := self.command(
 		&ret,
 		[]byte("BRPOPLPUSH"),
-		byteValue(source),
-		byteValue(destination),
+		[]byte(source),
+		[]byte(destination),
 		byteValue(timeout),
 	)
 	return ret, err
@@ -1249,13 +1250,13 @@ list. Here, -1 means the last element, -2 means the penultimate and so forth.
 
 http://redis.io/commands/lindex
 */
-func (self *Client) LIndex(key string, index string) (string, error) {
+func (self *Client) LIndex(key string, index int64) (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
 		[]byte("LINDEX"),
 		[]byte(key),
-		[]byte(index),
+		byteValue(index),
 	)
 	return ret, err
 }
@@ -1266,7 +1267,7 @@ value pivot.
 
 http://redis.io/commands/linsert
 */
-func (self *Client) LInsert(key string, where string, pivot string, value interface{}) (int64, error) {
+func (self *Client) LInsert(key string, where string, pivot interface{}, value interface{}) (int64, error) {
 	var ret int64
 
 	where = strings.ToUpper(where)
@@ -1280,7 +1281,7 @@ func (self *Client) LInsert(key string, where string, pivot string, value interf
 		[]byte("LINSERT"),
 		[]byte(key),
 		[]byte(where),
-		[]byte(pivot),
+		byteValue(pivot),
 		byteValue(value),
 	)
 
@@ -1414,14 +1415,14 @@ argument, see LINDEX.
 
 http://redis.io/commands/lset
 */
-func (self *Client) LSet(key string, index string, value interface{}) (string, error) {
+func (self *Client) LSet(key string, index int64, value interface{}) (string, error) {
 	var ret string
 
 	err := self.command(
 		&ret,
 		[]byte("LSET"),
 		[]byte(key),
-		[]byte(index),
+		byteValue(index),
 		byteValue(value),
 	)
 
