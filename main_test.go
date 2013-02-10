@@ -1117,6 +1117,7 @@ func TestTransactions(t *testing.T) {
 
 func TestEval(t *testing.T) {
 	var ls []string
+	var h string
 	var err error
 
 	ls, err = client.Eval("return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}", 2, "key1", "key2", "first", "second")
@@ -1125,9 +1126,36 @@ func TestEval(t *testing.T) {
 		t.Fatalf("Command failed: %s", err.Error())
 	}
 
-	if len(s) == 0 {
+	if len(ls) == 0 {
 		t.Fatalf("Failed")
 	}
+
+	h, err = client.ScriptLoad("return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	ls, err = client.ScriptExists("return {KEYS[1],KEYS[2],ARGV[1],ARGV[2]}")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) == 0 {
+		t.Fatalf("Failed")
+	}
+
+	ls, err = client.EvalSHA(h, 2, "key1", "key2", "first", "second")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) == 0 {
+		t.Fatalf("Failed")
+	}
+
 }
 
 func TestRandom(t *testing.T) {

@@ -2131,11 +2131,12 @@ http://redis.io/commands/script-exists
 func (self *Client) ScriptExists(script ...string) ([]string, error) {
 	var ret []string
 
-	args := make([][]byte, len(script)+1)
-	args[0] = []byte("SCRIPT EXISTS")
+	args := make([][]byte, len(script)+2)
+	args[0] = []byte("SCRIPT")
+	args[1] = []byte("EXISTS")
 
-	for i, v := range script {
-		args[1+i] = byteValue(v)
+	for i, _ := range script {
+		args[2+i] = []byte(script[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2153,7 +2154,8 @@ func (self *Client) ScriptFlush() (string, error) {
 
 	err := self.command(
 		&ret,
-		[]byte("SCRIPT FLUSH"),
+		[]byte("SCRIPT"),
+		[]byte("FLUSH"),
 	)
 
 	return ret, err
@@ -2171,7 +2173,8 @@ func (self *Client) ScriptKill() (string, error) {
 
 	err := self.command(
 		&ret,
-		[]byte("SCRIPT KILL"),
+		[]byte("SCRIPT"),
+		[]byte("KILL"),
 	)
 
 	return ret, err
@@ -2186,9 +2189,33 @@ http://redis.io/commands/eval
 func (self *Client) Eval(script string, numkeys int64, arguments ...interface{}) ([]string, error) {
 	var ret []string
 
-	args := make([][]byte, len(key)+3)
+	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("EVAL")
-	agrs[1] = []byte(script)
+	args[1] = []byte(script)
+	args[2] = byteValue(numkeys)
+
+	for i, _ := range arguments {
+		args[3+i] = byteValue(arguments[i])
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+Evaluates a script cached on the server side by its SHA1 digest. Scripts are
+cached on the server side using the SCRIPT LOAD command. The command is
+otherwise identical to EVAL.
+
+http://redis.io/commands/evalsha
+*/
+func (self *Client) EvalSHA(hash string, numkeys int64, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+3)
+	args[0] = []byte("EVALSHA")
+	args[1] = []byte(hash)
 	args[2] = byteValue(numkeys)
 
 	for i, _ := range arguments {
@@ -2213,7 +2240,8 @@ func (self *Client) ScriptLoad(script string) (string, error) {
 
 	err := self.command(
 		&ret,
-		[]byte("SCRIPT LOAD"),
+		[]byte("SCRIPT"),
+		[]byte("LOAD"),
 		[]byte(script),
 	)
 
