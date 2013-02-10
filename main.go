@@ -2776,8 +2776,8 @@ func (self *Client) Watch(key ...string) (string, error) {
 	args := make([][]byte, len(key)+1)
 	args[0] = []byte("WATCH")
 
-	for i, v := range key {
-		args[1+i] = byteValue(v)
+	for i, _ := range key {
+		args[1+i] = byteValue(key[i])
 	}
 
 	err := self.command(&ret, args...)

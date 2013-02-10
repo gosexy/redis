@@ -1077,6 +1077,44 @@ func TestPSubscriptions(t *testing.T) {
 
 }
 
+func TestTransactions(t *testing.T) {
+	var ls []string
+	var err error
+	var s string
+
+	client.Del("mykey")
+
+	client.Multi()
+
+	client.Del("mykey")
+	client.Set("mykey", 1)
+	client.Incr("mykey")
+
+	client.Discard()
+
+	client.Multi()
+
+	client.Set("mykey", 10)
+	client.Incr("mykey")
+
+	ls, err = client.Exec()
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 2 {
+		t.Fatalf("Failed.")
+	}
+
+	s, _ = client.Get("mykey")
+
+	if s != "11" {
+		t.Fatalf("Failed.")
+	}
+
+}
+
 func TestRandom(t *testing.T) {
 	var s string
 	var err error
