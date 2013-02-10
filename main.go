@@ -59,7 +59,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	//"unsafe"
+	"unsafe"
 )
 
 func timeVal(timeout time.Duration) C.struct_timeval {
@@ -72,6 +72,7 @@ type Client struct {
 
 func New() *Client {
 	self := &Client{}
+	self.ctx = nil
 	return self
 }
 
@@ -79,14 +80,14 @@ func byteValue(v interface{}) []byte {
 	return []byte(fmt.Sprintf("%v", v))
 }
 
-func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
+func (self *Client) Connect(host string, port uint) error {
 	var ctx *C.redisContext
 
-	ctx = C.redisConnectWithTimeout(
+	ctx = C.redisConnect(
 		C.CString(host),
 		C.int(port),
-		timeVal(timeout),
 	)
+
 	if ctx == nil {
 		return fmt.Errorf("Could not allocate redis context.")
 	} else if ctx.err > 0 {
@@ -98,7 +99,48 @@ func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Dura
 	return nil
 }
 
-func setReplyValue(v reflect.Value, reply *C.redisReply) error {
+func (self *Client) ConnectNonBlock(host string, port uint) error {
+	var ctx *C.redisContext
+
+	ctx = C.redisConnectNonBlock(
+		C.CString(host),
+		C.int(port),
+	)
+
+	if ctx == nil {
+		return fmt.Errorf("Could not allocate redis context.")
+	} else if ctx.err > 0 {
+		return fmt.Errorf(C.GoString(&ctx.errstr[0]))
+	}
+
+	self.ctx = ctx
+
+	return nil
+}
+
+func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
+	var ctx *C.redisContext
+
+	ctx = C.redisConnectWithTimeout(
+		C.CString(host),
+		C.int(port),
+		timeVal(timeout),
+	)
+
+	if ctx == nil {
+		return fmt.Errorf("Could not allocate redis context.")
+	} else if ctx.err > 0 {
+		return fmt.Errorf(C.GoString(&ctx.errstr[0]))
+	}
+
+	self.ctx = ctx
+
+	return nil
+}
+
+func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
+
+	reply := (*C.redisReply)(raw)
 
 	switch C.redisGetReplyType(reply) {
 	// Received a string.
@@ -186,7 +228,7 @@ func setReplyValue(v reflect.Value, reply *C.redisReply) error {
 			}
 			v.Set(reflect.ValueOf(b))
 		default:
-			return fmt.Errorf("Unsupported conversion: redis integer to %v", v.Kind())
+			return fmt.Errorf("Unsupported conversion: redis integer (%d) to %v", reply.integer, v.Kind())
 		}
 	case C.REDIS_REPLY_ARRAY:
 		switch v.Kind() {
@@ -196,14 +238,14 @@ func setReplyValue(v reflect.Value, reply *C.redisReply) error {
 			elements := reflect.MakeSlice(v.Type(), total, total)
 			for i := 0; i < total; i++ {
 				item := C.redisReplyGetElement(reply, C.int(i))
-				err = setReplyValue(elements.Index(i), item)
+				err = setReplyValue(elements.Index(i), unsafe.Pointer(item))
 				if err != nil {
 					return err
 				}
 			}
 			v.Set(elements)
 		default:
-			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
+			return fmt.Errorf("Unsupported conversion: redis array to %v", v.Kind())
 		}
 	case C.REDIS_REPLY_NIL:
 		v.Set(reflect.Zero(v.Type()))
@@ -252,6 +294,70 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 	return self.command(dest, argv...)
 }
 
+func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte) error {
+
+	var err error
+
+	argc := len(values)
+	argv := make([](*C.char), argc)
+	argvlen := make([]C.size_t, argc)
+
+	for i, _ := range values {
+		argv[i] = C.CString(string(values[i]))
+		argvlen[i] = C.size_t(len(values[i]))
+	}
+
+	raw := C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+	defer C.freeReplyObject(raw)
+
+	var reply C.redisReply
+
+	ptr := unsafe.Pointer(&reply)
+
+	for C.redisGetReply(self.ctx, &ptr) == C.REDIS_OK {
+
+		if ptr == nil {
+			return fmt.Errorf("Received unexpected nil pointer.\n")
+			continue
+		}
+
+		switch C.redisGetReplyType(&reply) {
+		/*
+			case C.REDIS_REPLY_STRING:
+			case C.REDIS_REPLY_ARRAY:
+			case C.REDIS_REPLY_INTEGER:
+			case C.REDIS_REPLY_NIL:
+			case C.REDIS_REPLY_STATUS:
+		*/
+		case C.REDIS_REPLY_ERROR:
+			return fmt.Errorf(C.GoString((&reply).str))
+		}
+
+		if dest == nil {
+			return nil
+		}
+
+		rv := reflect.ValueOf(dest)
+
+		if rv.Kind() != reflect.Ptr || rv.IsNil() {
+			return fmt.Errorf("Destination is not a pointer: %v\n", rv)
+		}
+
+		err = setReplyValue(rv.Elem(), ptr)
+
+		C.freeReplyObject(ptr)
+
+		if err != nil {
+			return err
+		}
+
+		c <- reflect.Indirect(rv).Interface().([]string)
+
+	}
+
+	return nil
+}
+
 func (self *Client) command(dest interface{}, values ...[]byte) error {
 
 	argc := len(values)
@@ -290,7 +396,7 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 		return fmt.Errorf("Destination is not a pointer: %v\n", rv)
 	}
 
-	return setReplyValue(rv.Elem(), reply)
+	return setReplyValue(rv.Elem(), unsafe.Pointer(reply))
 }
 
 /*
@@ -1710,19 +1816,19 @@ Subscribes the client to the given patterns.
 
 http://redis.io/commands/psubscribe
 */
-func (self *Client) PSubscribe(key ...string) (string, error) {
-	var ret string
+func (self *Client) PSubscribe(c chan []string, channel ...string) error {
+	var ret []string
 
-	args := make([][]byte, len(key)+1)
+	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("PSUBSCRIBE")
 
-	for i, v := range key {
-		args[1+i] = byteValue(v)
+	for i, _ := range channel {
+		args[1+i] = byteValue(channel[i])
 	}
 
-	err := self.command(&ret, args...)
+	err := self.bcommand(c, &ret, args...)
 
-	return ret, err
+	return err
 }
 
 /*
@@ -1774,8 +1880,8 @@ func (self *Client) PUnsubscribe(pattern ...string) (string, error) {
 	args := make([][]byte, len(pattern)+1)
 	args[0] = []byte("PUNSUBSCRIBE")
 
-	for i, pat := range pattern {
-		args[1+i] = byteValue(pat)
+	for i, _ := range pattern {
+		args[1+i] = byteValue(pattern[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1796,6 +1902,10 @@ func (self *Client) Quit() (string, error) {
 		&ret,
 		[]byte("QUIT"),
 	)
+
+	C.redisFree(self.ctx)
+
+	self.ctx = nil
 
 	return ret, err
 }
@@ -2492,19 +2602,19 @@ Subscribes the client to the specified channels.
 
 http://redis.io/commands/subscribe
 */
-func (self *Client) Subscribe(channel ...string) (string, error) {
-	var ret string
+func (self *Client) Subscribe(c chan []string, channel ...string) error {
+	var ret []string
 
 	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("SUBSCRIBE")
 
-	for i, v := range channel {
-		args[1+i] = byteValue(v)
+	for i, _ := range channel {
+		args[1+i] = byteValue(channel[i])
 	}
 
-	err := self.command(&ret, args...)
+	err := self.bcommand(c, &ret, args...)
 
-	return ret, err
+	return err
 }
 
 /*
@@ -2625,19 +2735,18 @@ given.
 
 http://redis.io/commands/unsubscribe
 */
-func (self *Client) Unsubscribe(channel ...string) (string, error) {
-	var ret string
+func (self *Client) Unsubscribe(channel ...string) error {
 
 	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("UNSUBSCRIBE")
 
-	for i, v := range channel {
-		args[1+i] = byteValue(v)
+	for i, _ := range channel {
+		args[1+i] = byteValue(channel[i])
 	}
 
-	err := self.command(&ret, args...)
+	err := self.command(nil, args...)
 
-	return ret, err
+	return err
 }
 
 /*

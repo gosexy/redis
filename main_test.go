@@ -8,6 +8,7 @@ import (
 
 var host = "127.0.0.1"
 var port = uint(6379)
+
 var client *Client
 
 func TestConnect(t *testing.T) {
@@ -988,6 +989,91 @@ func TestZSet(t *testing.T) {
 	if i != 3 {
 		t.Fatalf("Failed")
 	}
+
+}
+
+func TestPublish(t *testing.T) {
+	var err error
+
+	publisher := New()
+
+	err = publisher.Connect(host, port)
+
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	// Publishing
+	for i := 0; i < 200; i++ {
+		_, err = publisher.Publish("channel", i)
+		if err != nil {
+			t.Fatalf("Error: %s", err.Error())
+		}
+	}
+
+	publisher.Quit()
+}
+
+func TestSubscriptions(t *testing.T) {
+	var ls []string
+	var err error
+
+	consumer := New()
+
+	err = consumer.Connect(host, port)
+
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	// Subscribing
+	rec := make(chan []string)
+
+	go consumer.Subscribe(rec, "channel")
+
+	go TestPublish(t)
+
+	// Waiting for messages
+	for i := 0; i < 5; i++ {
+		ls = <-rec
+		//_ = ls
+		fmt.Printf("ls %v\n", ls)
+	}
+
+	consumer.Unsubscribe("channel")
+
+	consumer.Quit()
+
+}
+
+func TestPSubscriptions(t *testing.T) {
+	var ls []string
+	var err error
+
+	consumer := New()
+
+	err = consumer.ConnectWithTimeout(host, port, time.Second*1)
+
+	if err != nil {
+		t.Fatalf("Connect failed: %v", err)
+	}
+
+	// Subscribing
+	rec := make(chan []string)
+
+	go consumer.PSubscribe(rec, "channel")
+
+	go TestPublish(t)
+
+	for i := 0; i < 5; i++ {
+		ls = <-rec
+		//_ = ls
+		fmt.Printf("ls %v\n", ls)
+	}
+
+	consumer.PUnsubscribe("channel")
+
+	consumer.Quit()
 
 }
 
