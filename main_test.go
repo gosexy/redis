@@ -32,7 +32,7 @@ func TestConnect(t *testing.T) {
 	}
 }
 
-func TestSet(t *testing.T) {
+func TestSimpleSet(t *testing.T) {
 	var s string
 	var b bool
 	var err error
@@ -597,6 +597,179 @@ func TestExpire(t *testing.T) {
 	}
 
 	if i < 1000 {
+		t.Fatalf("Failed")
+	}
+
+}
+
+func TestSet(t *testing.T) {
+	var i int64
+	var b bool
+	var s string
+	var ls []string
+	var err error
+
+	// Deleting
+	client.Del("myset")
+
+	// Adding
+	i, err = client.SAdd("myset", "Hello", "World", "World")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Counting elements
+	i, err = client.SCard("myset")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Deleting
+	client.Del("key1", "key2")
+
+	// Adding
+	client.SAdd("key1", "a", "b", "c")
+	client.SAdd("key2", "c", "d", "e")
+
+	// Difference
+	ls, err = client.SDiff("key1", "key2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Difference
+	i, err = client.SDiffStore("key3", "key1", "key2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Intersection
+	ls, err = client.SInter("key1", "key2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Intersection
+	i, err = client.SInterStore("key3", "key1", "key2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Is member?
+	b, err = client.SIsMember("key3", "c")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != true {
+		t.Fatalf("Failed")
+	}
+
+	// Members
+	ls, err = client.SMembers("key1")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 3 {
+		t.Fatalf("Failed")
+	}
+
+	// Move
+	b, err = client.SMove("key1", "key2", "a")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if b != true {
+		t.Fatalf("Failed")
+	}
+
+	// Pop
+	s, err = client.SPop("key1")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if s == "" {
+		t.Fatalf("Failed")
+	}
+
+	// Random members
+	ls, err = client.SRandMember("key2", 2)
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 2 {
+		t.Fatalf("Failed")
+	}
+
+	// Random members
+	i, err = client.SRem("key2", "c")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 1 {
+		t.Fatalf("Failed")
+	}
+
+	// Union
+	ls, err = client.SUnion("key1", "key2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if len(ls) != 4 {
+		t.Fatalf("Failed")
+	}
+
+	// Union
+	i, err = client.SUnionStore("key3", "key1", "key2")
+
+	if err != nil {
+		t.Fatalf("Command failed: %s", err.Error())
+	}
+
+	if i != 4 {
 		t.Fatalf("Failed")
 	}
 

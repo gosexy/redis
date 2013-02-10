@@ -1966,8 +1966,8 @@ func (self *Client) SAdd(key string, member ...interface{}) (int64, error) {
 	args[0] = []byte("SADD")
 	args[1] = []byte(key)
 
-	for i, v := range member {
-		args[2+i] = byteValue(v)
+	for i, _ := range member {
+		args[2+i] = byteValue(member[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2096,8 +2096,8 @@ func (self *Client) SDiff(key ...string) ([]string, error) {
 	args := make([][]byte, len(key)+1)
 	args[0] = []byte("SDIFF")
 
-	for i, v := range key {
-		args[1+i] = byteValue(v)
+	for i, _ := range key {
+		args[1+i] = []byte(key[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2118,8 +2118,8 @@ func (self *Client) SDiffStore(destination string, key ...string) (int64, error)
 	args[0] = []byte("SDIFFSTORE")
 	args[1] = []byte(destination)
 
-	for i, v := range key {
-		args[2+i] = byteValue(v)
+	for i, _ := range key {
+		args[2+i] = []byte(key[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2251,15 +2251,14 @@ Returns the members of the set resulting from the intersection of all the given 
 
 http://redis.io/commands/sinter
 */
-func (self *Client) SInter(key string, against ...string) ([]string, error) {
+func (self *Client) SInter(key ...string) ([]string, error) {
 	var ret []string
 
-	args := make([][]byte, len(against)+2)
+	args := make([][]byte, len(key)+1)
 	args[0] = []byte("SINTER")
-	args[1] = []byte(key)
 
-	for i, v := range against {
-		args[2+i] = byteValue(v)
+	for i, _ := range key {
+		args[1+i] = []byte(key[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2273,16 +2272,15 @@ is stored in destination.
 
 http://redis.io/commands/sinterstore
 */
-func (self *Client) SInterStore(destination string, key string, against ...string) ([]string, error) {
-	var ret []string
+func (self *Client) SInterStore(destination string, key ...string) (int64, error) {
+	var ret int64
 
-	args := make([][]byte, len(against)+3)
+	args := make([][]byte, len(key)+2)
 	args[0] = []byte("SINTERSTORE")
 	args[1] = []byte(destination)
-	args[2] = []byte(key)
 
-	for i, v := range against {
-		args[3+i] = byteValue(v)
+	for i, _ := range key {
+		args[2+i] = []byte(key[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2295,14 +2293,14 @@ Returns if member is a member of the set stored at key.
 
 http://redis.io/commands/sismember
 */
-func (self *Client) SIsMember(key string, member string) (bool, error) {
+func (self *Client) SIsMember(key string, member interface{}) (bool, error) {
 	var ret bool
 
 	err := self.command(
 		&ret,
 		[]byte("SISMEMBER"),
 		[]byte(key),
-		[]byte(member),
+		byteValue(member),
 	)
 
 	return ret, err
@@ -2372,7 +2370,7 @@ or destination for other clients.
 
 http://redis.io/commands/smove
 */
-func (self *Client) SMove(source string, destination string, member string) (bool, error) {
+func (self *Client) SMove(source string, destination string, member interface{}) (bool, error) {
 	var ret bool
 
 	err := self.command(
@@ -2380,7 +2378,7 @@ func (self *Client) SMove(source string, destination string, member string) (boo
 		[]byte("SMOVE"),
 		[]byte(source),
 		[]byte(destination),
-		[]byte(member),
+		byteValue(member),
 	)
 
 	return ret, err
@@ -2414,7 +2412,7 @@ Removes and returns a random element from the set value stored at key.
 
 http://redis.io/commands/spop
 */
-func (self *Client) Spop(key string) (string, error) {
+func (self *Client) SPop(key string) (string, error) {
 	var ret string
 
 	err := self.command(
@@ -2452,15 +2450,15 @@ as an empty set and this command returns 0.
 
 http://redis.io/commands/srem
 */
-func (self *Client) SRem(key string, members ...string) (int64, error) {
+func (self *Client) SRem(key string, members ...interface{}) (int64, error) {
 	var ret int64
 
 	args := make([][]byte, len(members)+2)
 	args[0] = []byte("SREM")
 	args[1] = []byte(key)
 
-	for i, v := range members {
-		args[2+i] = byteValue(v)
+	for i, _ := range members {
+		args[2+i] = byteValue(members[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2517,8 +2515,8 @@ func (self *Client) SUnion(key ...string) ([]string, error) {
 	args := make([][]byte, len(key)+1)
 	args[0] = []byte("SUNION")
 
-	for i, v := range key {
-		args[1+i] = byteValue(v)
+	for i, _ := range key {
+		args[1+i] = []byte(key[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2532,15 +2530,15 @@ is stored in destination.
 
 http://redis.io/commands/sunionstore
 */
-func (self *Client) SUnionStore(destination string, key ...string) ([]string, error) {
-	var ret []string
+func (self *Client) SUnionStore(destination string, key ...string) (int64, error) {
+	var ret int64
 
 	args := make([][]byte, len(key)+2)
-	args[0] = []byte("SUNION")
+	args[0] = []byte("SUNIONSTORE")
 	args[1] = []byte(destination)
 
-	for i, v := range key {
-		args[2+i] = byteValue(v)
+	for i, _ := range key {
+		args[2+i] = []byte(key[i])
 	}
 
 	err := self.command(&ret, args...)
