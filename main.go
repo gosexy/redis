@@ -242,6 +242,8 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 				if err != nil {
 					return err
 				}
+				// Parent's freeReplyObject already takes care.
+				// C.freeReplyObject(unsafe.Pointer(item))
 			}
 			v.Set(elements)
 		default:
@@ -369,10 +371,9 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 		argvlen[i] = C.size_t(len(values[i]))
 	}
 
-	raw := C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
-	defer C.freeReplyObject(raw)
+	reply := (*C.redisReply)(C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0])))
 
-	reply := (*C.redisReply)(raw)
+	defer C.freeReplyObject(unsafe.Pointer(reply))
 
 	switch C.redisGetReplyType(reply) {
 	/*
@@ -920,7 +921,7 @@ Delete all the keys of the currently selected DB. This command never fails.
 
 http://redis.io/commands/flushdb
 */
-func (self *Client) FlushDb() (string, error) {
+func (self *Client) FlushDB() (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
