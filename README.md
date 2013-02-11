@@ -8,8 +8,8 @@ The standard `go get` will not work as we are using submodules to fetch
 the [hiredis][2] source code.
 
 ```
-mkdir -p $GOPATH/github.com/gosexy/redis
-cd $GOPATH/github.com/gosexy/redis
+mkdir -p $GOPATH/src/github.com/gosexy/redis
+cd $GOPATH/src/github.com/gosexy/redis
 git clone https://github.com/gosexy/redis.git .
 git submodule init
 git submodule update
