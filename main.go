@@ -297,20 +297,25 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 }
 
 func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte) error {
-
+	var i int
 	var err error
 
 	argc := len(values)
 	argv := make([](*C.char), argc)
 	argvlen := make([]C.size_t, argc)
 
-	for i, _ := range values {
+	for i, _ = range values {
 		argv[i] = C.CString(string(values[i]))
 		argvlen[i] = C.size_t(len(values[i]))
 	}
 
 	raw := C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+
 	defer C.freeReplyObject(raw)
+
+	for i = 0; i < len(argv); i++ {
+		C.free(unsafe.Pointer(argv[i]))
+	}
 
 	var reply C.redisReply
 
@@ -361,12 +366,13 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 }
 
 func (self *Client) command(dest interface{}, values ...[]byte) error {
+	var i int
 
 	argc := len(values)
 	argv := make([](*C.char), argc)
 	argvlen := make([]C.size_t, argc)
 
-	for i, _ := range values {
+	for i, _ = range values {
 		argv[i] = C.CString(string(values[i]))
 		argvlen[i] = C.size_t(len(values[i]))
 	}
@@ -374,6 +380,10 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 	reply := (*C.redisReply)(C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0])))
 
 	defer C.freeReplyObject(unsafe.Pointer(reply))
+
+	for i = 0; i < len(argv); i++ {
+		C.free(unsafe.Pointer(argv[i]))
+	}
 
 	switch C.redisGetReplyType(reply) {
 	/*
