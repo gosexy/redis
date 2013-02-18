@@ -21,6 +21,11 @@
   WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
+/*
+	Bindings for the official redis client, hiredis.
+
+	The complete set of commands for 2.6.10 is implemented.
+*/
 package redis
 
 /*
@@ -66,32 +71,42 @@ func timeVal(timeout time.Duration) C.struct_timeval {
 	return C.redisTimeVal(C.long(int64(timeout/time.Second)), C.long(int64(timeout%time.Millisecond)))
 }
 
+// A redis client
 type Client struct {
 	ctx *C.redisContext
 }
 
+// Creates a new redis client.
 func New() *Client {
 	self := &Client{}
 	self.ctx = nil
 	return self
 }
 
+// Transforms a value into bytes (TODO)
 func byteValue(v interface{}) []byte {
 	return []byte(fmt.Sprintf("%v", v))
 }
 
+// Connects the client to the given host and port.
 func (self *Client) Connect(host string, port uint) error {
 	var ctx *C.redisContext
 
+	chost := C.CString(host)
+
 	ctx = C.redisConnect(
-		C.CString(host),
+		chost,
 		C.int(port),
 	)
+
+	C.free(unsafe.Pointer(chost))
 
 	if ctx == nil {
 		return fmt.Errorf("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		return fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		C.redisFree(ctx)
+		return err
 	}
 
 	self.ctx = ctx
@@ -99,18 +114,25 @@ func (self *Client) Connect(host string, port uint) error {
 	return nil
 }
 
+// Creates a non-blocking connection with the given host and port.
 func (self *Client) ConnectNonBlock(host string, port uint) error {
 	var ctx *C.redisContext
 
+	chost := C.CString(host)
+
 	ctx = C.redisConnectNonBlock(
-		C.CString(host),
+		chost,
 		C.int(port),
 	)
+
+	C.free(unsafe.Pointer(chost))
 
 	if ctx == nil {
 		return fmt.Errorf("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		return fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		C.redisFree(ctx)
+		return err
 	}
 
 	self.ctx = ctx
@@ -118,19 +140,103 @@ func (self *Client) ConnectNonBlock(host string, port uint) error {
 	return nil
 }
 
+// Connects to the given host and port, giving up after timeout.
 func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
 	var ctx *C.redisContext
 
+	chost := C.CString(host)
+
 	ctx = C.redisConnectWithTimeout(
-		C.CString(host),
+		chost,
 		C.int(port),
 		timeVal(timeout),
 	)
 
+	C.free(unsafe.Pointer(chost))
+
 	if ctx == nil {
 		return fmt.Errorf("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		return fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		C.redisFree(ctx)
+		return err
+	}
+
+	self.ctx = ctx
+
+	return nil
+}
+
+// Creates a non-blocking connection between the client and the given UNIX
+// socket.
+func (self *Client) ConnectUnixNonBlock(path string) error {
+	var ctx *C.redisContext
+
+	cpath := C.CString(path)
+
+	ctx = C.redisConnectUnixNonBlock(
+		cpath,
+	)
+
+	C.free(unsafe.Pointer(cpath))
+
+	if ctx == nil {
+		return fmt.Errorf("Could not allocate redis context.")
+	} else if ctx.err > 0 {
+		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		C.redisFree(ctx)
+		return err
+	}
+
+	self.ctx = ctx
+
+	return nil
+}
+
+// Connects the client to the given UNIX socket.
+func (self *Client) ConnectUnix(path string) error {
+	var ctx *C.redisContext
+
+	cpath := C.CString(path)
+
+	ctx = C.redisConnectUnix(
+		cpath,
+	)
+
+	C.free(unsafe.Pointer(cpath))
+
+	if ctx == nil {
+		return fmt.Errorf("Could not allocate redis context.")
+	} else if ctx.err > 0 {
+		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		C.redisFree(ctx)
+		return err
+	}
+
+	self.ctx = ctx
+
+	return nil
+}
+
+// Connects the client to the given UNIX socket, giving up after timeout.
+func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) error {
+	var ctx *C.redisContext
+
+	cpath := C.CString(path)
+
+	ctx = C.redisConnectUnixWithTimeout(
+		cpath,
+		timeVal(timeout),
+	)
+
+	C.free(unsafe.Pointer(cpath))
+
+	if ctx == nil {
+		return fmt.Errorf("Could not allocate redis context.")
+	} else if ctx.err > 0 {
+		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		C.redisFree(ctx)
+		return err
 	}
 
 	self.ctx = ctx
@@ -258,6 +364,7 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 	return nil
 }
 
+// Sends a raw command and stores the response into a destination variable.
 func (self *Client) Command(dest interface{}, values ...interface{}) error {
 
 	argc := len(values)
@@ -409,6 +516,10 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 
 	return setReplyValue(rv.Elem(), unsafe.Pointer(reply))
 }
+
+/*
+	API implementation.
+*/
 
 /*
 If key already exists and is a string, this command appends the value at the

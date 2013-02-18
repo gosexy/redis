@@ -18,6 +18,7 @@ func TestConnect(t *testing.T) {
 	client = New()
 
 	err = client.ConnectWithTimeout(host, port, time.Second*1)
+
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
 	}
