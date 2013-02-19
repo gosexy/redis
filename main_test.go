@@ -1891,3 +1891,82 @@ func TestRawList(t *testing.T) {
 	}
 
 }
+
+func BenchmarkPing(b *testing.B) {
+	var err error
+	client.Del("hello")
+	for i := 0; i < b.N; i++ {
+		_, err = client.Ping()
+		if err != nil {
+			b.Fatalf(err.Error())
+			break
+		}
+	}
+}
+
+func BenchmarkSet(b *testing.B) {
+	var err error
+	for i := 0; i < b.N; i++ {
+		_, err = client.Set("hello", 1)
+		if err != nil {
+			b.Fatalf(err.Error())
+			break
+		}
+	}
+}
+
+func BenchmarkGet(b *testing.B) {
+	var err error
+	for i := 0; i < b.N; i++ {
+		_, err = client.Get("hello")
+		if err != nil {
+			b.Fatalf(err.Error())
+			break
+		}
+	}
+}
+
+func BenchmarkIncr(b *testing.B) {
+	var err error
+	for i := 0; i < b.N; i++ {
+		_, err = client.Incr("hello")
+		if err != nil {
+			b.Fatalf(err.Error())
+			break
+		}
+	}
+}
+
+func BenchmarkLPush(b *testing.B) {
+	var err error
+	client.Del("hello")
+	for i := 0; i < b.N; i++ {
+		_, err = client.LPush("hello", i)
+		if err != nil {
+			b.Fatalf(err.Error())
+			break
+		}
+	}
+}
+
+func BenchmarkLRange10(b *testing.B) {
+	var err error
+	for i := 0; i < b.N; i++ {
+		_, err = client.LRange("hello", 0, 10)
+		if err != nil {
+			b.Fatalf(err.Error())
+			break
+		}
+	}
+}
+
+func BenchmarkLRange100(b *testing.B) {
+	var err error
+	for i := 0; i < b.N; i++ {
+		_, err = client.LRange("hello", 0, 100)
+		if err != nil {
+			b.Fatalf(err.Error())
+			break
+		}
+	}
+}
