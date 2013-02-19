@@ -25,16 +25,28 @@ func main() {
 
 	log.Println("Connected to redis-server.")
 
-	log.Printf("Sending PING...\n")
-	s, err = client.Ping()
+	// DEL hello
+	log.Printf("DEL hello\n")
+	client.Del("hello")
+
+	// SET hello 1
+	log.Printf("SET hello 1\n")
+	client.Set("hello", 1)
+
+	// INCR hello
+	log.Printf("INCR hello\n")
+	client.Incr("hello")
+
+	// GET hello
+	log.Printf("GET hello\n")
+	s, err = client.Get("hello")
 
 	if err != nil {
-		log.Fatalf("Could not ping: %s\n", err.Error())
+		log.Fatalf("Could not GET: %s\n", err.Error())
 		return
 	}
 
-	log.Printf("Received %s!\n", s)
+	log.Printf("> hello = %s\n", s)
 
 	client.Quit()
-
 }
