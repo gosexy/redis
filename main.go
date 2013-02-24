@@ -83,9 +83,17 @@ func New() *Client {
 	return self
 }
 
-// Transforms a value into bytes (TODO)
+// Transforms a value into bytes
 func byteValue(v interface{}) []byte {
-	return []byte(fmt.Sprintf("%v", v))
+	switch v.(type) {
+	case []byte:
+		return v.([]byte)
+	case string:
+		return []byte(v.(string))
+	default:
+		return []byte(fmt.Sprintf("%v", v))
+	}
+	panic("not reached")
 }
 
 // Connects the client to the given host and port.
