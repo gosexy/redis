@@ -60,8 +60,8 @@ import "C"
 
 import (
 	"fmt"
+	"github.com/gosexy/to"
 	"reflect"
-	"strconv"
 	"strings"
 	"time"
 	"unsafe"
@@ -81,19 +81,6 @@ func New() *Client {
 	self := &Client{}
 	self.ctx = nil
 	return self
-}
-
-// Transforms a value into bytes
-func byteValue(v interface{}) []byte {
-	switch v.(type) {
-	case []byte:
-		return v.([]byte)
-	case string:
-		return []byte(v.(string))
-	default:
-		return []byte(fmt.Sprintf("%v", v))
-	}
-	panic("not reached")
 }
 
 // Connects the client to the given host and port.
@@ -267,44 +254,34 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 			v.Set(reflect.ValueOf(s))
 		case reflect.Int:
 			// string -> int
-			i, _ := strconv.ParseInt(s, 10, 0)
-			v.Set(reflect.ValueOf(int(i)))
+			v.Set(reflect.ValueOf(to.Int(s)))
 		case reflect.Int8:
 			// string -> int8
-			i, _ := strconv.ParseInt(s, 10, 8)
-			v.Set(reflect.ValueOf(int8(i)))
+			v.Set(reflect.ValueOf(to.Int8(s)))
 		case reflect.Int16:
 			// string -> int16
-			i, _ := strconv.ParseInt(s, 10, 16)
-			v.Set(reflect.ValueOf(int16(i)))
+			v.Set(reflect.ValueOf(to.Int16(s)))
 		case reflect.Int32:
 			// string -> int32
-			i, _ := strconv.ParseInt(s, 10, 32)
-			v.Set(reflect.ValueOf(int32(i)))
+			v.Set(reflect.ValueOf(to.Int32(s)))
 		case reflect.Int64:
 			// string -> int64
-			i, _ := strconv.ParseInt(s, 10, 64)
-			v.Set(reflect.ValueOf(int64(i)))
+			v.Set(reflect.ValueOf(to.Int64(s)))
 		case reflect.Uint:
 			// string -> uint
-			i, _ := strconv.ParseUint(s, 10, 0)
-			v.Set(reflect.ValueOf(uint(i)))
+			v.Set(reflect.ValueOf(to.Uint(s)))
 		case reflect.Uint8:
 			// string -> uint8
-			i, _ := strconv.ParseUint(s, 10, 8)
-			v.Set(reflect.ValueOf(uint8(i)))
+			v.Set(reflect.ValueOf(to.Uint8(s)))
 		case reflect.Uint16:
 			// string -> uint16
-			i, _ := strconv.ParseUint(s, 10, 16)
-			v.Set(reflect.ValueOf(uint16(i)))
+			v.Set(reflect.ValueOf(to.Uint16(s)))
 		case reflect.Uint32:
 			// string -> uint32
-			i, _ := strconv.ParseUint(s, 10, 32)
-			v.Set(reflect.ValueOf(uint32(i)))
+			v.Set(reflect.ValueOf(to.Uint32(s)))
 		case reflect.Uint64:
 			// string -> uint64
-			i, _ := strconv.ParseUint(s, 10, 64)
-			v.Set(reflect.ValueOf(uint64(i)))
+			v.Set(reflect.ValueOf(to.Uint64(s)))
 		default:
 			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
 		}
@@ -313,7 +290,7 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 		switch v.Kind() {
 		case reflect.String:
 			// integer -> string
-			v.Set(reflect.ValueOf(fmt.Sprintf("%d", int64(reply.integer))))
+			v.Set(reflect.ValueOf(to.String(reply.integer)))
 		case reflect.Int:
 			// Different integer types.
 			v.Set(reflect.ValueOf(int(reply.integer)))
@@ -379,33 +356,7 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 	argv := make([][]byte, argc)
 
 	for i := 0; i < argc; i++ {
-		value := values[i]
-		switch value.(type) {
-		case string:
-			argv[i] = []byte(value.(string))
-		case int64:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(int64)))
-		case int32:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(int32)))
-		case int16:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(int16)))
-		case int8:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(int8)))
-		case int:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(int)))
-		case uint64:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(uint64)))
-		case uint32:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(uint32)))
-		case uint16:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(uint16)))
-		case uint8:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(uint8)))
-		case uint:
-			argv[i] = []byte(fmt.Sprintf("%d", value.(uint)))
-		default:
-			return fmt.Errorf("Unsupported input type: %v.", reflect.TypeOf(value))
-		}
+		argv[i] = to.Bytes(values[i])
 	}
 
 	return self.command(dest, argv...)
@@ -501,13 +452,6 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 	}
 
 	switch C.redisGetReplyType(reply) {
-	/*
-		case C.REDIS_REPLY_STRING:
-		case C.REDIS_REPLY_ARRAY:
-		case C.REDIS_REPLY_INTEGER:
-		case C.REDIS_REPLY_NIL:
-		case C.REDIS_REPLY_STATUS:
-	*/
 	case C.REDIS_REPLY_ERROR:
 		return fmt.Errorf(C.GoString(reply.str))
 	}
@@ -542,7 +486,7 @@ func (self *Client) Append(key string, value interface{}) (int64, error) {
 		&ret,
 		[]byte("APPEND"),
 		[]byte(key),
-		byteValue(value),
+		to.Bytes(value),
 	)
 	return ret, err
 }
@@ -608,7 +552,7 @@ func (self *Client) BitCount(key string, params ...int64) (int64, error) {
 	args[0] = []byte("BITCOUNT")
 	args[1] = []byte(key)
 	for i, _ := range params {
-		args[2+i] = byteValue(params[i])
+		args[2+i] = to.Bytes(params[i])
 	}
 	err := self.command(&ret, args...)
 	return ret, err
@@ -627,7 +571,7 @@ func (self *Client) BitOp(op string, dest string, keys ...string) (int64, error)
 	args[1] = []byte(op)
 	args[2] = []byte(dest)
 	for i, _ := range keys {
-		args[3+i] = byteValue(keys[i])
+		args[3+i] = to.Bytes(keys[i])
 	}
 	err := self.command(&ret, args...)
 	return ret, err
@@ -648,10 +592,10 @@ func (self *Client) BLPop(timeout uint64, keys ...string) ([]string, error) {
 	args[0] = []byte("BLPOP")
 
 	for i, key := range keys {
-		args[1+i] = byteValue(key)
+		args[1+i] = to.Bytes(key)
 	}
 
-	args[1+i] = byteValue(timeout)
+	args[1+i] = to.Bytes(timeout)
 
 	err := self.command(&ret, args...)
 	return ret, err
@@ -673,9 +617,9 @@ func (self *Client) BRPop(timeout uint64, keys ...string) ([]string, error) {
 	args[0] = []byte("BRPOP")
 
 	for i, key := range keys {
-		args[1+i] = byteValue(key)
+		args[1+i] = to.Bytes(key)
 	}
-	args[1+i] = byteValue(timeout)
+	args[1+i] = to.Bytes(timeout)
 
 	err := self.command(&ret, args...)
 	return ret, err
@@ -696,7 +640,7 @@ func (self *Client) BRPopLPush(source string, destination string, timeout int64)
 		[]byte("BRPOPLPUSH"),
 		[]byte(source),
 		[]byte(destination),
-		byteValue(timeout),
+		to.Bytes(timeout),
 	)
 	return ret, err
 }
@@ -712,7 +656,7 @@ func (self *Client) ClientKill(ip string, port uint) (string, error) {
 		&ret,
 		[]byte("CLIENT"),
 		[]byte("KILL"),
-		byteValue(fmt.Sprintf("%s:%d", ip, port)),
+		to.Bytes(fmt.Sprintf("%s:%d", ip, port)),
 	)
 	return ret, err
 }
@@ -761,7 +705,7 @@ func (self *Client) ClientSetName(connectionName string) (string, error) {
 		&ret,
 		[]byte("CLIENT"),
 		[]byte("SETNAME"),
-		byteValue(connectionName),
+		to.Bytes(connectionName),
 	)
 	return ret, err
 }
@@ -798,7 +742,7 @@ func (self *Client) ConfigSet(parameter string, value interface{}) (string, erro
 		[]byte("CONFIG"),
 		[]byte("SET"),
 		[]byte(parameter),
-		byteValue(value),
+		to.Bytes(value),
 	)
 	return ret, err
 }
@@ -843,7 +787,7 @@ func (self *Client) DebugObject(key string) (string, error) {
 	err := self.command(
 		&ret,
 		[]byte("DEBUG OBJECT"),
-		byteValue(key),
+		to.Bytes(key),
 	)
 	return ret, err
 }
@@ -895,7 +839,7 @@ func (self *Client) DecrBy(key string, decrement int64) (int64, error) {
 		&ret,
 		[]byte("DECRBY"),
 		[]byte(key),
-		byteValue(decrement),
+		to.Bytes(decrement),
 	)
 	return ret, err
 }
@@ -911,7 +855,7 @@ func (self *Client) Del(keys ...string) (int64, error) {
 	args := make([][]byte, len(keys)+1)
 	args[0] = []byte("DEL")
 	for i, key := range keys {
-		args[1+i] = byteValue(key)
+		args[1+i] = to.Bytes(key)
 	}
 	err := self.command(&ret, args...)
 	return ret, err
@@ -959,7 +903,7 @@ func (self *Client) Echo(message interface{}) (string, error) {
 	err := self.command(
 		&ret,
 		[]byte("ECHO"),
-		byteValue(message),
+		to.Bytes(message),
 	)
 	return ret, err
 }
@@ -989,7 +933,7 @@ func (self *Client) Exists(key string) (bool, error) {
 	err := self.command(
 		&ret,
 		[]byte("EXISTS"),
-		byteValue(key),
+		to.Bytes(key),
 	)
 	return ret, err
 }
@@ -1007,7 +951,7 @@ func (self *Client) Expire(key string, seconds uint64) (bool, error) {
 		&ret,
 		[]byte("EXPIRE"),
 		[]byte(key),
-		byteValue(seconds),
+		to.Bytes(seconds),
 	)
 	return ret, err
 }
@@ -1025,7 +969,7 @@ func (self *Client) ExpireAt(key string, unixTime uint64) (bool, error) {
 		&ret,
 		[]byte("EXPIREAT"),
 		[]byte(key),
-		byteValue(unixTime),
+		to.Bytes(unixTime),
 	)
 	return ret, err
 }
@@ -1086,7 +1030,7 @@ func (self *Client) GetBit(key string, offset int64) (int64, error) {
 		&ret,
 		[]byte("GETBIT"),
 		[]byte(key),
-		byteValue(offset),
+		to.Bytes(offset),
 	)
 	return ret, err
 }
@@ -1104,8 +1048,8 @@ func (self *Client) GetRange(key string, start int64, end int64) (string, error)
 	err := self.command(&ret,
 		[]byte("GETRANGE"),
 		[]byte(key),
-		byteValue(start),
-		byteValue(end),
+		to.Bytes(start),
+		to.Bytes(end),
 	)
 	return ret, err
 }
@@ -1121,8 +1065,8 @@ func (self *Client) GetSet(key string, value interface{}) (string, error) {
 	err := self.command(
 		&ret,
 		[]byte(string("GETSET")),
-		byteValue(key),
-		byteValue(value),
+		to.Bytes(key),
+		to.Bytes(value),
 	)
 	return ret, err
 }
@@ -1141,7 +1085,7 @@ func (self *Client) HDel(key string, fields ...string) (int64, error) {
 	args[0] = []byte("HDEL")
 
 	for i, _ := range fields {
-		args[1+i] = byteValue(fields[i])
+		args[1+i] = to.Bytes(fields[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1219,7 +1163,7 @@ func (self *Client) HIncrBy(key string, field string, increment int64) (int64, e
 		[]byte("HINCRBY"),
 		[]byte(key),
 		[]byte(field),
-		byteValue(increment),
+		to.Bytes(increment),
 	)
 
 	return ret, err
@@ -1240,7 +1184,7 @@ func (self *Client) HIncrByFloat(key string, field string, increment float64) (s
 		[]byte("HINCRBYFLOAT"),
 		[]byte(key),
 		[]byte(field),
-		byteValue(increment),
+		to.Bytes(increment),
 	)
 
 	return ret, err
@@ -1294,7 +1238,7 @@ func (self *Client) HMGet(key string, fields ...string) ([]string, error) {
 	args[1] = []byte(key)
 
 	for i, field := range fields {
-		args[2+i] = byteValue(field)
+		args[2+i] = to.Bytes(field)
 	}
 
 	err := self.command(&ret, args...)
@@ -1321,7 +1265,7 @@ func (self *Client) HMSet(key string, values ...interface{}) (string, error) {
 	args[1] = []byte(key)
 
 	for i, value := range values {
-		args[2+i] = byteValue(value)
+		args[2+i] = to.Bytes(value)
 	}
 
 	err := self.command(&ret, args...)
@@ -1365,7 +1309,7 @@ func (self *Client) HSetNX(key string, field string, value interface{}) (bool, e
 		[]byte("HSETNX"),
 		[]byte(key),
 		[]byte(field),
-		byteValue(value),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -1420,7 +1364,7 @@ func (self *Client) IncrBy(key string, increment int64) (int64, error) {
 		&ret,
 		[]byte("INCRBY"),
 		[]byte(key),
-		byteValue(increment),
+		to.Bytes(increment),
 	)
 	return ret, err
 }
@@ -1438,7 +1382,7 @@ func (self *Client) IncrByFloat(key string, increment float64) (string, error) {
 		&ret,
 		[]byte("INCRBYFLOAT"),
 		[]byte(key),
-		byteValue(increment),
+		to.Bytes(increment),
 	)
 	return ret, err
 }
@@ -1502,7 +1446,7 @@ func (self *Client) LIndex(key string, index int64) (string, error) {
 		&ret,
 		[]byte("LINDEX"),
 		[]byte(key),
-		byteValue(index),
+		to.Bytes(index),
 	)
 	return ret, err
 }
@@ -1527,8 +1471,8 @@ func (self *Client) LInsert(key string, where string, pivot interface{}, value i
 		[]byte("LINSERT"),
 		[]byte(key),
 		[]byte(where),
-		byteValue(pivot),
-		byteValue(value),
+		to.Bytes(pivot),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -1584,8 +1528,8 @@ func (self *Client) LPush(key string, values ...interface{}) (int64, error) {
 	args[0] = []byte("LPUSH")
 	args[1] = []byte(key)
 
-	for i, value := range values {
-		args[2+i] = byteValue(value)
+	for i, _ := range values {
+		args[2+i] = to.Bytes(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1607,7 +1551,7 @@ func (self *Client) LPushX(key string, value interface{}) (int64, error) {
 		&ret,
 		[]byte("LPUSHX"),
 		[]byte(key),
-		byteValue(value),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -1627,8 +1571,8 @@ func (self *Client) LRange(key string, start int64, stop int64) ([]string, error
 		&ret,
 		[]byte("LRANGE"),
 		[]byte(key),
-		byteValue(start),
-		byteValue(stop),
+		to.Bytes(start),
+		to.Bytes(stop),
 	)
 
 	return ret, err
@@ -1648,8 +1592,8 @@ func (self *Client) LRem(key string, count int64, value interface{}) (int64, err
 		&ret,
 		[]byte("LREM"),
 		[]byte(key),
-		byteValue(count),
-		byteValue(value),
+		to.Bytes(count),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -1668,8 +1612,8 @@ func (self *Client) LSet(key string, index int64, value interface{}) (string, er
 		&ret,
 		[]byte("LSET"),
 		[]byte(key),
-		byteValue(index),
-		byteValue(value),
+		to.Bytes(index),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -1689,8 +1633,8 @@ func (self *Client) LTrim(key string, start int64, stop int64) (string, error) {
 		&ret,
 		[]byte("LTRIM"),
 		[]byte(key),
-		byteValue(start),
-		byteValue(stop),
+		to.Bytes(start),
+		to.Bytes(stop),
 	)
 
 	return ret, err
@@ -1731,10 +1675,10 @@ func (self *Client) Migrate(host string, port uint, key string, destination stri
 		&ret,
 		[]byte("MIGRATE"),
 		[]byte(host),
-		byteValue(port),
+		to.Bytes(port),
 		[]byte(key),
 		[]byte(destination),
-		byteValue(timeout),
+		to.Bytes(timeout),
 	)
 
 	return ret, err
@@ -1779,7 +1723,7 @@ func (self *Client) MSet(values ...interface{}) (string, error) {
 	args[0] = []byte("MSET")
 
 	for i, _ := range values {
-		args[1+i] = byteValue(values[i])
+		args[1+i] = to.Bytes(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1804,7 +1748,7 @@ func (self *Client) MSetNX(values ...interface{}) (bool, error) {
 	args[0] = []byte("MSETNX")
 
 	for i, _ := range values {
-		args[1+i] = byteValue(values[i])
+		args[1+i] = to.Bytes(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -1846,7 +1790,7 @@ func (self *Client) Object(subcommand string, arguments ...interface{}) (string,
 	args[1] = []byte(subcommand)
 
 	for i, arg := range arguments {
-		args[2+i] = byteValue(arg)
+		args[2+i] = to.Bytes(arg)
 	}
 
 	err := self.command(&ret, args...)
@@ -1886,7 +1830,7 @@ func (self *Client) PExpire(key string, milliseconds int64) (bool, error) {
 		&ret,
 		[]byte("PEXPIRE"),
 		[]byte(key),
-		byteValue(milliseconds),
+		to.Bytes(milliseconds),
 	)
 
 	return ret, err
@@ -1905,7 +1849,7 @@ func (self *Client) PExpireAt(key string, milliseconds int64) (bool, error) {
 		&ret,
 		[]byte("PEXPIREAT"),
 		[]byte(key),
-		byteValue(milliseconds),
+		to.Bytes(milliseconds),
 	)
 
 	return ret, err
@@ -1941,8 +1885,8 @@ func (self *Client) PSetEx(key string, milliseconds int64, value interface{}) (s
 		&ret,
 		[]byte("PSETEX"),
 		[]byte(key),
-		byteValue(milliseconds),
-		byteValue(value),
+		to.Bytes(milliseconds),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -1960,7 +1904,7 @@ func (self *Client) PSubscribe(c chan []string, channel ...string) error {
 	args[0] = []byte("PSUBSCRIBE")
 
 	for i, _ := range channel {
-		args[1+i] = byteValue(channel[i])
+		args[1+i] = to.Bytes(channel[i])
 	}
 
 	err := self.bcommand(c, &ret, args...)
@@ -1999,7 +1943,7 @@ func (self *Client) Publish(channel string, message interface{}) (int64, error) 
 		&ret,
 		[]byte("PUBLISH"),
 		[]byte(channel),
-		byteValue(message),
+		to.Bytes(message),
 	)
 
 	return ret, err
@@ -2018,7 +1962,7 @@ func (self *Client) PUnsubscribe(pattern ...string) (string, error) {
 	args[0] = []byte("PUNSUBSCRIBE")
 
 	for i, _ := range pattern {
-		args[1+i] = byteValue(pattern[i])
+		args[1+i] = to.Bytes(pattern[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2115,7 +2059,7 @@ func (self *Client) Restore(key string, ttl int64, serializedValue string) (stri
 		&ret,
 		[]byte("RESTORE"),
 		[]byte(key),
-		byteValue(ttl),
+		to.Bytes(ttl),
 		[]byte(serializedValue),
 	)
 
@@ -2174,7 +2118,7 @@ func (self *Client) RPush(key string, values ...interface{}) (int64, error) {
 	args[1] = []byte(key)
 
 	for i, _ := range values {
-		args[2+i] = byteValue(values[i])
+		args[2+i] = to.Bytes(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2196,7 +2140,7 @@ func (self *Client) RPushX(key string, value interface{}) (int64, error) {
 		&ret,
 		[]byte("RPUSHX"),
 		[]byte(key),
-		byteValue(value),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -2217,7 +2161,7 @@ func (self *Client) SAdd(key string, member ...interface{}) (int64, error) {
 	args[1] = []byte(key)
 
 	for i, _ := range member {
-		args[2+i] = byteValue(member[i])
+		args[2+i] = to.Bytes(member[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2329,10 +2273,10 @@ func (self *Client) Eval(script string, numkeys int64, arguments ...interface{})
 	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("EVAL")
 	args[1] = []byte(script)
-	args[2] = byteValue(numkeys)
+	args[2] = to.Bytes(numkeys)
 
 	for i, _ := range arguments {
-		args[3+i] = byteValue(arguments[i])
+		args[3+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2353,10 +2297,10 @@ func (self *Client) EvalSHA(hash string, numkeys int64, arguments ...interface{}
 	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("EVALSHA")
 	args[1] = []byte(hash)
-	args[2] = byteValue(numkeys)
+	args[2] = to.Bytes(numkeys)
 
 	for i, _ := range arguments {
-		args[3+i] = byteValue(arguments[i])
+		args[3+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2440,7 +2384,7 @@ func (self *Client) Select(index int64) (string, error) {
 	err := self.command(
 		&ret,
 		[]byte("SELECT"),
-		byteValue(index),
+		to.Bytes(index),
 	)
 
 	return ret, err
@@ -2459,7 +2403,7 @@ func (self *Client) Set(key string, value interface{}) (string, error) {
 		&ret,
 		[]byte("SET"),
 		[]byte(key),
-		byteValue(value),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -2477,8 +2421,8 @@ func (self *Client) SetBit(key string, offset int64, value int64) (int64, error)
 		&ret,
 		[]byte("SETBIT"),
 		[]byte(key),
-		byteValue(offset),
-		byteValue(value),
+		to.Bytes(offset),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -2497,8 +2441,8 @@ func (self *Client) SetEx(key string, seconds int64, value interface{}) (int, er
 		&ret,
 		[]byte("SETEX"),
 		[]byte(key),
-		byteValue(seconds),
-		byteValue(value),
+		to.Bytes(seconds),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -2518,7 +2462,7 @@ func (self *Client) SetNX(key string, value interface{}) (bool, error) {
 		&ret,
 		[]byte("SETNX"),
 		[]byte(key),
-		byteValue(value),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -2540,8 +2484,8 @@ func (self *Client) SetRange(key string, offset int64, value interface{}) (int64
 		&ret,
 		[]byte("SETRANGE"),
 		[]byte(key),
-		byteValue(offset),
-		byteValue(value),
+		to.Bytes(offset),
+		to.Bytes(value),
 	)
 
 	return ret, err
@@ -2601,7 +2545,7 @@ func (self *Client) SIsMember(key string, member interface{}) (bool, error) {
 		&ret,
 		[]byte("SISMEMBER"),
 		[]byte(key),
-		byteValue(member),
+		to.Bytes(member),
 	)
 
 	return ret, err
@@ -2623,7 +2567,7 @@ func (self *Client) SlaveOf(key string, port uint) (string, error) {
 		&ret,
 		[]byte("SLAVEOF"),
 		[]byte(key),
-		byteValue(port),
+		to.Bytes(port),
 	)
 
 	return ret, err
@@ -2641,7 +2585,7 @@ func (self *Client) SlowLog(subcommand string, argument interface{}) ([]string, 
 		&ret,
 		[]byte("SLOWLOG"),
 		[]byte(subcommand),
-		byteValue(argument),
+		to.Bytes(argument),
 	)
 
 	return ret, err
@@ -2679,7 +2623,7 @@ func (self *Client) SMove(source string, destination string, member interface{})
 		[]byte("SMOVE"),
 		[]byte(source),
 		[]byte(destination),
-		byteValue(member),
+		to.Bytes(member),
 	)
 
 	return ret, err
@@ -2700,7 +2644,7 @@ func (self *Client) Sort(key string, arguments ...string) ([]string, error) {
 	args[1] = []byte(key)
 
 	for i, _ := range arguments {
-		args[2+i] = byteValue(arguments[i])
+		args[2+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2738,7 +2682,7 @@ func (self *Client) SRandMember(key string, count int64) ([]string, error) {
 		&ret,
 		[]byte("SRANDMEMBER"),
 		[]byte(key),
-		byteValue(count),
+		to.Bytes(count),
 	)
 
 	return ret, err
@@ -2759,7 +2703,7 @@ func (self *Client) SRem(key string, members ...interface{}) (int64, error) {
 	args[1] = []byte(key)
 
 	for i, _ := range members {
-		args[2+i] = byteValue(members[i])
+		args[2+i] = to.Bytes(members[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2797,7 +2741,7 @@ func (self *Client) Subscribe(c chan []string, channel ...string) error {
 	args[0] = []byte("SUBSCRIBE")
 
 	for i, _ := range channel {
-		args[1+i] = byteValue(channel[i])
+		args[1+i] = to.Bytes(channel[i])
 	}
 
 	err := self.bcommand(c, &ret, args...)
@@ -2929,7 +2873,7 @@ func (self *Client) Unsubscribe(channel ...string) error {
 	args[0] = []byte("UNSUBSCRIBE")
 
 	for i, _ := range channel {
-		args[1+i] = byteValue(channel[i])
+		args[1+i] = to.Bytes(channel[i])
 	}
 
 	err := self.command(nil, args...)
@@ -2965,7 +2909,7 @@ func (self *Client) Watch(key ...string) (string, error) {
 	args[0] = []byte("WATCH")
 
 	for i, _ := range key {
-		args[1+i] = byteValue(key[i])
+		args[1+i] = to.Bytes(key[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -2996,7 +2940,7 @@ func (self *Client) ZAdd(key string, arguments ...interface{}) (int64, error) {
 	args[1] = []byte(key)
 
 	for i, _ := range arguments {
-		args[2+i] = byteValue(arguments[i])
+		args[2+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -3034,8 +2978,8 @@ func (self *Client) ZCount(key string, min interface{}, max interface{}) (int64,
 		&ret,
 		[]byte("ZCOUNT"),
 		[]byte(key),
-		byteValue(min),
-		byteValue(max),
+		to.Bytes(min),
+		to.Bytes(max),
 	)
 
 	return ret, err
@@ -3056,8 +3000,8 @@ func (self *Client) ZIncrBy(key string, increment int64, member interface{}) (st
 		&ret,
 		[]byte("ZINCRBY"),
 		[]byte(key),
-		byteValue(increment),
-		byteValue(member),
+		to.Bytes(increment),
+		to.Bytes(member),
 	)
 
 	return ret, err
@@ -3077,10 +3021,10 @@ func (self *Client) ZInterStore(destination string, numkeys int64, arguments ...
 	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("ZINTERSTORE")
 	args[1] = []byte(destination)
-	args[2] = byteValue(numkeys)
+	args[2] = to.Bytes(numkeys)
 
 	for i, _ := range arguments {
-		args[3+i] = byteValue(arguments[i])
+		args[3+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -3103,7 +3047,7 @@ func (self *Client) ZRange(key string, values ...interface{}) ([]string, error) 
 	args[1] = []byte(key)
 
 	for i, v := range values {
-		args[2+i] = byteValue(v)
+		args[2+i] = to.Bytes(v)
 	}
 
 	err := self.command(&ret, args...)
@@ -3126,7 +3070,7 @@ func (self *Client) ZRangeByScore(key string, values ...interface{}) ([]string, 
 	args[1] = []byte(key)
 
 	for i, _ := range values {
-		args[2+i] = byteValue(values[i])
+		args[2+i] = to.Bytes(values[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -3148,7 +3092,7 @@ func (self *Client) ZRank(key string, member interface{}) (int64, error) {
 		&ret,
 		[]byte("ZRANK"),
 		[]byte(key),
-		byteValue(member),
+		to.Bytes(member),
 	)
 
 	return ret, err
@@ -3168,7 +3112,7 @@ func (self *Client) ZRem(key string, arguments ...interface{}) (int64, error) {
 	args[1] = []byte(key)
 
 	for i, _ := range arguments {
-		args[2+i] = byteValue(arguments[i])
+		args[2+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -3193,8 +3137,8 @@ func (self *Client) ZRemRangeByRank(key string, start interface{}, stop interfac
 		&ret,
 		[]byte("ZREMRANGEBYRANK"),
 		[]byte(key),
-		byteValue(start),
-		byteValue(stop),
+		to.Bytes(start),
+		to.Bytes(stop),
 	)
 
 	return ret, err
@@ -3213,8 +3157,8 @@ func (self *Client) ZRemRangeByScore(key string, min interface{}, max interface{
 		&ret,
 		[]byte("ZREMRANGEBYSCORE"),
 		[]byte(key),
-		byteValue(min),
-		byteValue(max),
+		to.Bytes(min),
+		to.Bytes(max),
 	)
 
 	return ret, err
@@ -3233,11 +3177,11 @@ func (self *Client) ZRevRange(key string, start int64, stop int64, params ...int
 	args := make([][]byte, len(params)+4)
 	args[0] = []byte("ZREVRANGE")
 	args[1] = []byte(key)
-	args[2] = byteValue(start)
-	args[3] = byteValue(stop)
+	args[2] = to.Bytes(start)
+	args[3] = to.Bytes(stop)
 
 	for i, v := range params {
-		args[4+i] = byteValue(v)
+		args[4+i] = to.Bytes(v)
 	}
 
 	err := self.command(&ret, args...)
@@ -3259,11 +3203,11 @@ func (self *Client) ZRevRangeByScore(key string, start interface{}, stop interfa
 	args := make([][]byte, len(params)+4)
 	args[0] = []byte("ZREVRANGEBYSCORE")
 	args[1] = []byte(key)
-	args[2] = byteValue(start)
-	args[3] = byteValue(stop)
+	args[2] = to.Bytes(start)
+	args[3] = to.Bytes(stop)
 
 	for i, _ := range params {
-		args[4+i] = byteValue(params[i])
+		args[4+i] = to.Bytes(params[i])
 	}
 
 	err := self.command(&ret, args...)
@@ -3285,7 +3229,7 @@ func (self *Client) ZRevRank(key string, member interface{}) (int64, error) {
 		&ret,
 		[]byte("ZREVRANK"),
 		[]byte(key),
-		byteValue(member),
+		to.Bytes(member),
 	)
 
 	return ret, err
@@ -3303,7 +3247,7 @@ func (self *Client) ZScore(key string, member interface{}) (int64, error) {
 		&ret,
 		[]byte("ZSCORE"),
 		[]byte(key),
-		byteValue(member),
+		to.Bytes(member),
 	)
 
 	return ret, err
@@ -3322,11 +3266,11 @@ func (self *Client) ZUnionStore(destination string, numkeys int64, key string, p
 	args := make([][]byte, len(params)+4)
 	args[0] = []byte("ZUNIONSTORE")
 	args[1] = []byte(destination)
-	args[2] = byteValue(numkeys)
+	args[2] = to.Bytes(numkeys)
 	args[3] = []byte(key)
 
 	for i, _ := range params {
-		args[4+i] = byteValue(params[i])
+		args[4+i] = to.Bytes(params[i])
 	}
 
 	err := self.command(&ret, args...)
