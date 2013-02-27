@@ -3260,20 +3260,20 @@ keys (numkeys) before passing the input keys and the other (optional) arguments.
 
 http://redis.io/commands/zunionstore
 */
-func (self *Client) ZUnionStore(destination string, numkeys int64, key string, params ...interface{}) (int64, error) {
+func (self *Client) ZUnionStore(destination string, numkeys int64, arguments ...interface{}) (int64, error) {
 	var ret int64
 
-	args := make([][]byte, len(params)+4)
+	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("ZUNIONSTORE")
 	args[1] = []byte(destination)
 	args[2] = to.Bytes(numkeys)
-	args[3] = []byte(key)
 
-	for i, _ := range params {
-		args[4+i] = to.Bytes(params[i])
+	for i, _ := range arguments {
+		args[3+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
 
 	return ret, err
 }
+
