@@ -59,6 +59,7 @@ redisReply *redisReplyGetElement(redisReply *el, int i) {
 import "C"
 
 import (
+	"errors"
 	"fmt"
 	"github.com/gosexy/to"
 	"reflect"
@@ -97,9 +98,9 @@ func (self *Client) Connect(host string, port uint) error {
 	C.free(unsafe.Pointer(chost))
 
 	if ctx == nil {
-		return fmt.Errorf("Could not allocate redis context.")
+		return errors.New("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := errors.New(C.GoString(&ctx.errstr[0]))
 		C.redisFree(ctx)
 		return err
 	}
@@ -123,9 +124,9 @@ func (self *Client) ConnectNonBlock(host string, port uint) error {
 	C.free(unsafe.Pointer(chost))
 
 	if ctx == nil {
-		return fmt.Errorf("Could not allocate redis context.")
+		return errors.New("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := errors.New(C.GoString(&ctx.errstr[0]))
 		C.redisFree(ctx)
 		return err
 	}
@@ -150,9 +151,9 @@ func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Dura
 	C.free(unsafe.Pointer(chost))
 
 	if ctx == nil {
-		return fmt.Errorf("Could not allocate redis context.")
+		return errors.New("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := errors.New(C.GoString(&ctx.errstr[0]))
 		C.redisFree(ctx)
 		return err
 	}
@@ -176,9 +177,9 @@ func (self *Client) ConnectUnixNonBlock(path string) error {
 	C.free(unsafe.Pointer(cpath))
 
 	if ctx == nil {
-		return fmt.Errorf("Could not allocate redis context.")
+		return errors.New("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := errors.New(C.GoString(&ctx.errstr[0]))
 		C.redisFree(ctx)
 		return err
 	}
@@ -201,9 +202,9 @@ func (self *Client) ConnectUnix(path string) error {
 	C.free(unsafe.Pointer(cpath))
 
 	if ctx == nil {
-		return fmt.Errorf("Could not allocate redis context.")
+		return errors.New("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := errors.New(C.GoString(&ctx.errstr[0]))
 		C.redisFree(ctx)
 		return err
 	}
@@ -227,9 +228,9 @@ func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) e
 	C.free(unsafe.Pointer(cpath))
 
 	if ctx == nil {
-		return fmt.Errorf("Could not allocate redis context.")
+		return errors.New("Could not allocate redis context.")
 	} else if ctx.err > 0 {
-		err := fmt.Errorf(C.GoString(&ctx.errstr[0]))
+		err := errors.New(C.GoString(&ctx.errstr[0]))
 		C.redisFree(ctx)
 		return err
 	}
@@ -342,7 +343,7 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 		}
 	case C.REDIS_REPLY_NIL:
 		v.Set(reflect.Zero(v.Type()))
-		return fmt.Errorf("Received NIL response.")
+		return errors.New("Received NIL response.")
 	default:
 		return fmt.Errorf("Unknown redis reply type: %v", C.redisGetReplyType(reply))
 	}
@@ -365,6 +366,10 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte) error {
 	var i int
 	var err error
+
+	if self.ctx == nil {
+		return errors.New("This client is not connected")
+	}
 
 	argc := len(values)
 	argv := make([](*C.char), argc)
@@ -390,7 +395,7 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 	for C.redisGetReply(self.ctx, &ptr) == C.REDIS_OK {
 
 		if ptr == nil {
-			return fmt.Errorf("Received unexpected nil pointer.\n")
+			return errors.New("Received unexpected nil pointer.\n")
 			continue
 		}
 
@@ -403,7 +408,7 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 			case C.REDIS_REPLY_STATUS:
 		*/
 		case C.REDIS_REPLY_ERROR:
-			return fmt.Errorf(C.GoString((&reply).str))
+			return errors.New(C.GoString((&reply).str))
 		}
 
 		if dest == nil {
@@ -434,6 +439,10 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 func (self *Client) command(dest interface{}, values ...[]byte) error {
 	var i int
 
+	if self.ctx == nil {
+		return errors.New("This client is not connected")
+	}
+
 	argc := len(values)
 	argv := make([](*C.char), argc)
 	argvlen := make([]C.size_t, argc)
@@ -453,7 +462,7 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 
 	switch C.redisGetReplyType(reply) {
 	case C.REDIS_REPLY_ERROR:
-		return fmt.Errorf(C.GoString(reply.str))
+		return errors.New(C.GoString(reply.str))
 	}
 
 	if dest == nil {
@@ -1257,7 +1266,7 @@ func (self *Client) HMSet(key string, values ...interface{}) (string, error) {
 	var ret string
 
 	if len(values)%2 != 0 {
-		return "", fmt.Errorf("Expecting field -> value pairs.")
+		return "", errors.New("Expecting field -> value pairs.")
 	}
 
 	args := make([][]byte, len(values)+2)
@@ -1463,7 +1472,7 @@ func (self *Client) LInsert(key string, where string, pivot interface{}, value i
 	where = strings.ToUpper(where)
 
 	if where != "AFTER" && where != "BEFORE" {
-		return 0, fmt.Errorf("The `where` value must be either BEFORE or AFTER.")
+		return 0, errors.New("The `where` value must be either BEFORE or AFTER.")
 	}
 
 	err := self.command(
@@ -1716,7 +1725,7 @@ func (self *Client) MSet(values ...interface{}) (string, error) {
 	var ret string
 
 	if len(values)%2 != 0 {
-		return "", fmt.Errorf("Expecting field -> value pairs.")
+		return "", errors.New("Expecting field -> value pairs.")
 	}
 
 	args := make([][]byte, len(values)+1)
@@ -1741,7 +1750,7 @@ func (self *Client) MSetNX(values ...interface{}) (bool, error) {
 	var ret bool
 
 	if len(values)%2 != 0 {
-		return false, fmt.Errorf("Expecting field -> value pairs.")
+		return false, errors.New("Expecting field -> value pairs.")
 	}
 
 	args := make([][]byte, len(values)+1)
@@ -1983,6 +1992,10 @@ func (self *Client) Quit() (string, error) {
 		&ret,
 		[]byte("QUIT"),
 	)
+
+	if err != nil {
+		return "", err
+	}
 
 	C.redisFree(self.ctx)
 
@@ -2932,7 +2945,7 @@ func (self *Client) ZAdd(key string, arguments ...interface{}) (int64, error) {
 	var ret int64
 
 	if len(arguments)%2 != 0 {
-		return 0, fmt.Errorf("Failed to relate SCORE -> MEMBER using the given arguments.")
+		return 0, errors.New("Failed to relate SCORE -> MEMBER using the given arguments.")
 	}
 
 	args := make([][]byte, len(arguments)+2)

@@ -11,7 +11,7 @@ var port = uint(6379)
 
 var client *Client
 
-func TestConnect(t *testing.T) {
+func TestPing(t *testing.T) {
 	var s string
 	var err error
 
@@ -20,7 +20,7 @@ func TestConnect(t *testing.T) {
 	err = client.ConnectWithTimeout(host, port, time.Second*1)
 
 	if err != nil {
-		t.Fatalf("Connect failed: %v", err)
+		t.Fatalf(err.Error())
 	}
 
 	s, err = client.Ping()
@@ -1890,6 +1890,38 @@ func TestRawList(t *testing.T) {
 		t.Fatalf("Failed")
 	}
 
+}
+
+func TestQuit(t *testing.T) {
+	var err error
+
+	_, err = client.Quit()
+
+	if err != nil {
+		t.Fatalf("Failed")
+	}
+
+	_, err = client.Quit()
+
+	if err == nil {
+		t.Fatalf("Did not fail.")
+	}
+
+	_, err = client.Set("foo", 1)
+
+	if err == nil {
+		t.Fatalf("Did not fail.")
+	}
+}
+
+func BenchmarkConnect(b *testing.B) {
+	client = New()
+
+	err := client.ConnectWithTimeout(host, port, time.Second*1)
+
+	if err != nil {
+		b.Fatalf(err.Error())
+	}
 }
 
 func BenchmarkPing(b *testing.B) {
