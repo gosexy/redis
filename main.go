@@ -392,7 +392,15 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 
 	ptr := unsafe.Pointer(&reply)
 
-	for C.redisGetReply(self.ctx, &ptr) == C.REDIS_OK {
+	for {
+
+		if self.ctx == nil {
+			return errors.New("Connection lost.")
+		}
+
+		if C.redisGetReply(self.ctx, &ptr) != C.REDIS_OK {
+			break
+		}
 
 		if ptr == nil {
 			return errors.New("Received unexpected nil pointer.\n")
@@ -430,7 +438,6 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 		}
 
 		c <- reflect.Indirect(rv).Interface().([]string)
-
 	}
 
 	return nil
@@ -1986,22 +1993,18 @@ pending replies have been written to the client.
 http://redis.io/commands/quit
 */
 func (self *Client) Quit() (string, error) {
-	var ret string
 
-	err := self.command(
-		&ret,
-		[]byte("QUIT"),
-	)
-
-	if err != nil {
-		return "", err
+	if self.ctx != nil {
+		go self.command(
+			nil,
+			[]byte("QUIT"),
+		)
+		C.redisFree(self.ctx)
+		self.ctx = nil
+		return "", nil
 	}
 
-	C.redisFree(self.ctx)
-
-	self.ctx = nil
-
-	return ret, err
+	return "", errors.New("This client is not connected.")
 }
 
 /*
