@@ -61,7 +61,7 @@ import "C"
 import (
 	"errors"
 	"fmt"
-	"github.com/gosexy/to"
+	"menteslibres.net/gosexy/to"
 	"reflect"
 	"strings"
 	"time"

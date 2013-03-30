@@ -40,5 +40,5 @@ BenchmarkTcglRedisIncr              10000      133342 ns/op
 BenchmarkTcglRedisLPush             10000      161915 ns/op
 BenchmarkTcglRedisLRange10          10000      201212 ns/op
 BenchmarkTcglRedisLRange100         10000      249613 ns/op
-ok    github.com/gosexy/redis/_benchmarks 83.130s
+ok    menteslibres.net/gosexy/redis/_benchmarks 83.130s
 ```
