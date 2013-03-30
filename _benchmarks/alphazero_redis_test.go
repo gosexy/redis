@@ -2,7 +2,7 @@ package main
 
 import (
 	redis "github.com/alphazero/Go-Redis"
-	"github.com/gosexy/to"
+	"menteslibres.net/gosexy/to"
 	"testing"
 )
 

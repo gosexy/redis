@@ -7,7 +7,7 @@ The complete set of commands for the 2.6.10 release is supported.
 ## How to install
 
 ```
-go get github.com/gosexy/redis
+go get menteslibres.net/gosexy/redis
 ```
 
 ## Usage
@@ -15,7 +15,7 @@ go get github.com/gosexy/redis
 Install the package with `go get` and use `import` to include it in your project.
 
 ```
-import "github.com/gosexy/redis"
+import "menteslibres.net/gosexy/redis"
 ```
 
 The `redis.New()` function returns a `*redis.Client` struct that you can then
@@ -161,11 +161,11 @@ full example you'll see something like this:
 You could read the docs on a terminal:
 
 ```
-go doc github.com/gosexy/redis | less
+go doc menteslibres.net/gosexy/redis | less
 ```
 
 The same documentation is available through web interface at the address
-`http://localhost:6060/pkg/github.com/gosexy/redis/` by issuing a special
+`http://localhost:6060/pkg/menteslibres.net/gosexy/redis/` by issuing a special
 command:
 
 ```go
@@ -206,5 +206,5 @@ This is Open Source released under the terms of the MIT License:
 [3]: http://golang.org/doc/effective_go.html#channels
 [4]: http://golang.org/doc/effective_go.html#goroutines
 [5]: http://godoc.org
-[6]: http://godoc.org/github.com/gosexy/redis
+[6]: http://godoc.org/menteslibres.net/gosexy/redis
 [7]: http://redis.io/commands
