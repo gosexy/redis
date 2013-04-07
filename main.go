@@ -255,31 +255,31 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 			v.Set(reflect.ValueOf(s))
 		case reflect.Int:
 			// string -> int
-			v.Set(reflect.ValueOf(to.Int(s)))
+			v.Set(reflect.ValueOf(int(to.Int64(s))))
 		case reflect.Int8:
 			// string -> int8
-			v.Set(reflect.ValueOf(to.Int8(s)))
+			v.Set(reflect.ValueOf(int8(to.Int64(s))))
 		case reflect.Int16:
 			// string -> int16
-			v.Set(reflect.ValueOf(to.Int16(s)))
+			v.Set(reflect.ValueOf(int16(to.Int64(s))))
 		case reflect.Int32:
 			// string -> int32
-			v.Set(reflect.ValueOf(to.Int32(s)))
+			v.Set(reflect.ValueOf(int32(to.Int64(s))))
 		case reflect.Int64:
 			// string -> int64
 			v.Set(reflect.ValueOf(to.Int64(s)))
 		case reflect.Uint:
 			// string -> uint
-			v.Set(reflect.ValueOf(to.Uint(s)))
+			v.Set(reflect.ValueOf(uint(to.Uint64(s))))
 		case reflect.Uint8:
 			// string -> uint8
-			v.Set(reflect.ValueOf(to.Uint8(s)))
+			v.Set(reflect.ValueOf(uint8(to.Uint64(s))))
 		case reflect.Uint16:
 			// string -> uint16
-			v.Set(reflect.ValueOf(to.Uint16(s)))
+			v.Set(reflect.ValueOf(uint16(to.Uint64(s))))
 		case reflect.Uint32:
 			// string -> uint32
-			v.Set(reflect.ValueOf(to.Uint32(s)))
+			v.Set(reflect.ValueOf(uint32(to.Uint64(s))))
 		case reflect.Uint64:
 			// string -> uint64
 			v.Set(reflect.ValueOf(to.Uint64(s)))
