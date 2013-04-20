@@ -3,7 +3,7 @@
 // license that can be found in the LICENSE file.
 
 // Waiting for FDs via epoll(7).
-// Basically stolen from src/pkg/net/fd_linux.go
+
 package redis
 
 import (
@@ -17,16 +17,24 @@ const (
 )
 
 type pollster struct {
-	epfd         int
-	events       map[int]uint32
+	epfd int
+
+	// Events we're already waiting for
+	// Must hold pollServer lock
+	events map[int]uint32
+
+	// An event buffer for EpollWait.
+	// Used without a lock, may only be used by WaitFD.
 	waitEventBuf [10]syscall.EpollEvent
 	waitEvents   []syscall.EpollEvent
-	ctlEvent     syscall.EpollEvent
+
+	// An event buffer for EpollCtl, to avoid a malloc.
+	// Must hold pollServer lock.
+	ctlEvent syscall.EpollEvent
 }
 
 func newpollster() (p *pollster, err error) {
 	p = new(pollster)
-
 	if p.epfd, err = syscall.EpollCreate1(syscall.EPOLL_CLOEXEC); err != nil {
 		if err != syscall.ENOSYS {
 			return nil, os.NewSyscallError("epoll_create1", err)
@@ -127,16 +135,16 @@ func (p *pollster) DelFD(fd int, mode int) {
 	}
 }
 
-func (p *pollster) WaitFD(nsec int64) (fd int, mode int, err error) {
+func (p *pollster) WaitFD(s *pollServer, nsec int64) (fd int, mode int, err error) {
 	for len(p.waitEvents) == 0 {
 		var msec int = -1
 		if nsec > 0 {
 			msec = int((nsec + 1e6 - 1) / 1e6)
 		}
 
-		//s.Unlock()
+		s.Unlock()
 		n, err := syscall.EpollWait(p.epfd, p.waitEventBuf[0:], msec)
-		//s.Lock()
+		s.Lock()
 
 		if err != nil {
 			if err == syscall.EAGAIN || err == syscall.EINTR {

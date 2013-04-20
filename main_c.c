@@ -71,6 +71,7 @@ redisReply *redisReplyGetElement(redisReply *el, int i) {
 
 void redisGoroutineReadEvent(void *arg) {
 	redisGoroutineEvents *e = (redisGoroutineEvents*)arg;
+	redisAsyncContext *c = e->context;
 	redisAsyncHandleRead(e->context);
 }
 

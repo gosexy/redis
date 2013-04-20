@@ -32,6 +32,8 @@ func TestPing(t *testing.T) {
 	if s != "PONG" {
 		t.Fatalf("Failed")
 	}
+
+	client.Quit()
 }
 
 func TestPingAsync(t *testing.T) {
@@ -55,12 +57,22 @@ func TestPingAsync(t *testing.T) {
 	if s != "PONG" {
 		t.Fatalf("Failed")
 	}
+
+	client.Quit()
+
 }
 
 func TestSimpleSet(t *testing.T) {
 	var s string
 	var b bool
 	var err error
+
+	// We'll be reusing this client.
+	err = client.Connect(host, port)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	s, err = client.Set("foo", "hello world.")
 
@@ -1063,7 +1075,7 @@ func TestSubscriptions(t *testing.T) {
 	for i < 1 {
 		select {
 		case ls = <-rec:
-			fmt.Printf("Subscription got: %v (%d)\n", ls, i)
+			t.Logf("Got: %v (%d)\n", ls, i)
 			i++
 		}
 	}
@@ -1071,7 +1083,6 @@ func TestSubscriptions(t *testing.T) {
 	consumer.Unsubscribe("channel")
 
 	consumer.Quit()
-
 }
 
 func TestPSubscriptions(t *testing.T) {
@@ -1099,7 +1110,7 @@ func TestPSubscriptions(t *testing.T) {
 	for i < 1 {
 		select {
 		case ls = <-rec:
-			fmt.Printf("Subscription got: %v (%d)\n", ls, i)
+			t.Logf("Got: %v (%d)\n", ls, i)
 			i++
 		}
 	}
@@ -1946,8 +1957,8 @@ func TestQuit(t *testing.T) {
 func BenchmarkConnect(b *testing.B) {
 	client = New()
 
-	//err := client.ConnectWithTimeout(host, port, time.Second*1)
-	err := client.ConnectNonBlock(host, port)
+	err := client.ConnectWithTimeout(host, port, time.Second*1)
+	//err := client.ConnectNonBlock(host, port)
 
 	if err != nil {
 		b.Fatalf(err.Error())

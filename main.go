@@ -76,8 +76,6 @@ import (
 	"unsafe"
 )
 
-var pollServer *pollster
-
 const (
 	pollWait = 100
 )
@@ -108,36 +106,13 @@ type Client struct {
 var fdev map[int]map[int]func()
 
 func init() {
-	var err error
 
 	fdev = map[int]map[int]func(){
 		'r': make(map[int]func()),
 		'w': make(map[int]func()),
 	}
 
-	pollServer, err = newpollster()
-
-	if err == nil {
-		go func() {
-			for {
-				fd, m, err := pollServer.WaitFD(pollWait)
-
-				if err == nil {
-					if fd >= 0 {
-
-						if fdev[m] != nil {
-							if fn, ok := fdev[m][fd]; ok == true {
-								fn()
-							}
-						}
-
-					}
-				}
-			}
-		}()
-	} else {
-		panic(err.Error())
-	}
+	startServer()
 }
 
 // Creates a new redis client.
@@ -159,7 +134,7 @@ func redisEventAddWrite(evptr unsafe.Pointer) {
 		C.redisGoroutineWriteEvent(unsafe.Pointer(ev))
 	}
 
-	pollServer.AddFD(fd, 'w', false)
+	pollserver.WaitWrite(fd)
 }
 
 //export redisEventDelWrite
@@ -167,8 +142,10 @@ func redisEventDelWrite(evptr unsafe.Pointer) {
 	ev := (*C.redisGoroutineEvents)(evptr)
 	ctx := (*C.redisContext)(&ev.context.c)
 	fd := int(ctx.fd)
+	fdev['w'][fd] = nil
 	delete(fdev['w'], fd)
-	pollServer.DelFD(fd, 'w')
+	pollserver.EvictWrite(fd)
+
 }
 
 //export redisEventDelRead
@@ -176,13 +153,20 @@ func redisEventDelRead(evptr unsafe.Pointer) {
 	ev := (*C.redisGoroutineEvents)(evptr)
 	ctx := (*C.redisContext)(&ev.context.c)
 	fd := int(ctx.fd)
+	fdev['r'][fd] = nil
 	delete(fdev['r'], fd)
-	pollServer.DelFD(fd, 'r')
+	pollserver.EvictRead(fd)
 }
 
 //export redisEventCleanup
 func redisEventCleanup(evptr unsafe.Pointer) {
-	// pollServer.Close()
+	ev := (*C.redisGoroutineEvents)(evptr)
+	ctx := (*C.redisContext)(&ev.context.c)
+	fd := int(ctx.fd)
+	delete(fdev['r'], fd)
+	delete(fdev['w'], fd)
+	pollserver.EvictRead(fd)
+	pollserver.EvictWrite(fd)
 }
 
 //export redisEventAddRead
@@ -194,13 +178,14 @@ func redisEventAddRead(evptr unsafe.Pointer) {
 	fdev['r'][fd] = func() {
 		C.redisGoroutineReadEvent(unsafe.Pointer(ev))
 	}
-
-	pollServer.AddFD(fd, 'r', false)
+	pollserver.WaitRead(fd)
 }
 
 //export asyncReceive
 func asyncReceive(a unsafe.Pointer, b unsafe.Pointer) {
-	(*(*func(unsafe.Pointer))(unsafe.Pointer(&b)))(a)
+	if b != nil {
+		(*(*func(unsafe.Pointer))(unsafe.Pointer(&b)))(a)
+	}
 }
 
 // Creates a simple connection.
@@ -215,6 +200,8 @@ func (self *Client) simpleConnect(ctx *C.redisContext) error {
 	}
 
 	self.ctx = ctx
+
+	self.async = nil
 
 	return nil
 }
@@ -479,7 +466,7 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 		return ErrMissingCommand
 	}
 
-	//command := strings.ToUpper(string(values[0]))
+	command := strings.ToUpper(string(values[0]))
 
 	argc := len(values)
 	argv := make([](*C.char), argc)
@@ -513,6 +500,11 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 		var fnptr = unsafe.Pointer(&fn)
 
 		self.loop = true
+
+		if command == "QUIT" {
+			self.loop = false
+			fn = nil
+		}
 
 		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
 
@@ -619,8 +611,6 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 	return nil
 }
 
-var debug bool
-
 func (self *Client) command(dest interface{}, values ...[]byte) error {
 
 	var i int
@@ -657,17 +647,23 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 			ok <- (*C.redisReply)(unsafe.Pointer(r))
 		}
 
+		if command == "QUIT" {
+			fn = nil
+		}
+
 		var asyncReceiveCallback = asyncReceive
 		var ptr = unsafe.Pointer(&asyncReceiveCallback)
 		var fnptr = unsafe.Pointer(&fn)
 
-		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+		var wait C.int
+
+		wait = C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
 
 		if wait != C.REDIS_OK {
 			return ErrUnexpectedResponse
 		}
 
-		if command == "UNSUBSCRIBE" || command == "PUNSUBSCRIBE" || command == "QUIT" {
+		if command == "UNSUBSCRIBE" || command == "PUNSUBSCRIBE" {
 			return nil
 		}
 
@@ -2220,26 +2216,22 @@ func (self *Client) Quit() (string, error) {
 
 	if self.ctx != nil {
 
-		if self.ev != nil {
+		if self.async != nil {
 
-			self.bcommand(
-				nil,
+			// Killing the connection ourselves.
+			C.redisAsyncDisconnect(self.async)
+			// There is no need to manually redisAsyncFree() self.async, it will take
+			// care of itself.
+
+		} else {
+
+			// Request the server to close the connection.
+			self.command(
 				nil,
 				[]byte("QUIT"),
 			)
 
-			C.redisAsyncDisconnect(self.async)
-
-		} else {
-
-			/*
-				self.command(
-					nil,
-					[]byte("QUIT"),
-				)
-
-				C.redisFree(self.ctx);
-			*/
+			C.redisFree(self.ctx)
 		}
 
 		self.async = nil
