@@ -23,8 +23,6 @@
 
 #include <stdarg.h>
 #include <stdlib.h>
-#include <event.h>
-#include <signal.h>
 
 #include "net.h"
 #include "net.c"
