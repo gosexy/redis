@@ -1,8 +1,8 @@
 package main
 
 import (
-	"menteslibres.net/gosexy/redis"
 	"log"
+	"menteslibres.net/gosexy/redis"
 	"strings"
 	"time"
 )
@@ -34,7 +34,7 @@ func spawnPublisher() error {
 		publisher.Publish("channel", i)
 	}
 
-	log.Printf("Closing publisher.\n")
+	log.Printf("Closing publisher...\n")
 
 	publisher.Quit()
 
@@ -47,7 +47,7 @@ func spawnConsumer() error {
 
 	consumer = redis.New()
 
-	err = consumer.Connect(host, port)
+	err = consumer.ConnectNonBlock(host, port)
 
 	if err != nil {
 		log.Fatalf("Consumer failed to connect: %s\n", err.Error())
@@ -58,15 +58,18 @@ func spawnConsumer() error {
 
 	rec := make(chan []string)
 
-	log.Printf("Waiting for rec channel. Ctrl + C to quit.\n")
+	log.Printf("Consumer will read exactly 6 messages before quitting.\n")
+
 	go consumer.Subscribe(rec, "channel")
 
 	var ls []string
 
-	for {
+	for j := 0; j < 6; j++ {
 		ls = <-rec
-		log.Printf("Consumer received: %v\n", strings.Join(ls, ", "))
+		log.Printf("Consumer received message[%d]: %v\n", j, strings.Join(ls, ", "))
 	}
+
+	log.Printf("Closing consumer...\n")
 
 	consumer.Quit()
 
@@ -81,7 +84,7 @@ func main() {
 	log.Printf("Spawning publisher into a go-routine.\n")
 	go spawnPublisher()
 
-	log.Printf("Waiting 10 secs...\n")
-	time.Sleep(time.Second * 10)
+	log.Printf("Waiting 3 secs...\n")
+	time.Sleep(time.Second * 3)
 
 }

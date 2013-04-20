@@ -32,12 +32,47 @@ func TestPing(t *testing.T) {
 	if s != "PONG" {
 		t.Fatalf("Failed")
 	}
+
+	client.Quit()
+}
+
+func TestPingAsync(t *testing.T) {
+	var s string
+	var err error
+
+	client = New()
+
+	err = client.ConnectNonBlock(host, port)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
+
+	s, err = client.Ping()
+
+	if err != nil {
+		t.Fatalf("Command failed: %v", err)
+	}
+
+	if s != "PONG" {
+		t.Fatalf("Failed")
+	}
+
+	client.Quit()
+
 }
 
 func TestSimpleSet(t *testing.T) {
 	var s string
 	var b bool
 	var err error
+
+	// We'll be reusing this client.
+	err = client.Connect(host, port)
+
+	if err != nil {
+		t.Fatalf(err.Error())
+	}
 
 	s, err = client.Set("foo", "hello world.")
 
@@ -1016,12 +1051,15 @@ func TestPublish(t *testing.T) {
 }
 
 func TestSubscriptions(t *testing.T) {
-	//var ls []string
+	var ls []string
+
 	var err error
 
 	consumer := New()
 
-	err = consumer.Connect(host, port)
+	err = consumer.ConnectNonBlock(host, port)
+
+	consumer.Set("test", "TestSubscriptions")
 
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
@@ -1032,29 +1070,31 @@ func TestSubscriptions(t *testing.T) {
 
 	go consumer.Subscribe(rec, "channel")
 
-	go TestPublish(t)
+	var i = 0
 
-	// Waiting for messages
-	for i := 0; i < 5; i++ {
-		<-rec
-		//ls = <-rec
-		//_ = ls
-		//fmt.Printf("ls %v\n", ls)
+	for i < 1 {
+		select {
+		case ls = <-rec:
+			t.Logf("Got: %v (%d)\n", ls, i)
+			i++
+		}
 	}
 
 	consumer.Unsubscribe("channel")
 
 	consumer.Quit()
-
 }
 
 func TestPSubscriptions(t *testing.T) {
-	//var ls []string
+	var ls []string
+
 	var err error
 
 	consumer := New()
 
-	err = consumer.ConnectWithTimeout(host, port, time.Second*1)
+	err = consumer.ConnectNonBlock(host, port)
+
+	consumer.Set("test", "TestPSubscriptions")
 
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
@@ -1065,19 +1105,19 @@ func TestPSubscriptions(t *testing.T) {
 
 	go consumer.PSubscribe(rec, "channel")
 
-	go TestPublish(t)
+	var i = 0
 
-	for i := 0; i < 5; i++ {
-		<-rec
-		//ls = <-rec
-		//_ = ls
-		//fmt.Printf("ls %v\n", ls)
+	for i < 1 {
+		select {
+		case ls = <-rec:
+			t.Logf("Got: %v (%d)\n", ls, i)
+			i++
+		}
 	}
 
 	consumer.PUnsubscribe("channel")
 
 	consumer.Quit()
-
 }
 
 func TestTransactions(t *testing.T) {
@@ -1918,6 +1958,7 @@ func BenchmarkConnect(b *testing.B) {
 	client = New()
 
 	err := client.ConnectWithTimeout(host, port, time.Second*1)
+	//err := client.ConnectNonBlock(host, port)
 
 	if err != nil {
 		b.Fatalf(err.Error())

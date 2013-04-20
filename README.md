@@ -131,7 +131,8 @@ This is the expected output of the above
 ### Subscriptions
 
 You can use `SUBSCRIBE` and `PSUBSCRIBE` with [channels][3] and
-[goroutines][4]:
+[goroutines][4] inside a non-blocking connection. You can create a non-blocking
+connection using the `ConnectNonBlock` or `ConnectUnixNonBlock` functions.
 
 ```go
 go consumer.Subscribe(rec, "channel")
@@ -158,21 +159,7 @@ full example you'll see something like this:
 
 ## Documentation
 
-You could read the docs on a terminal:
-
-```
-go doc menteslibres.net/gosexy/redis | less
-```
-
-The same documentation is available through web interface at the address
-`http://localhost:6060/pkg/menteslibres.net/gosexy/redis/` by issuing a special
-command:
-
-```go
-godoc -http=:6060
-````
-
-And you can also read the docs [online][6], thanks to [godoc.org][5].
+See the [online docs][6] for gosexy/redis at [godoc.org][5].
 
 Don't forget to check the [complete list of redis commands][7] too!
 

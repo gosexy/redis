@@ -32,28 +32,36 @@ package redis
 #cgo CFLAGS: -I./_hiredis
 
 #include <stdarg.h>
+#include <stdlib.h>
+#include <event.h>
+#include <signal.h>
 
 #include "net.h"
-#include "net.c"
-
 #include "sds.h"
-#include "sds.c"
-
 #include "hiredis.h"
-#include "hiredis.c"
+#include "async.h"
 
-struct timeval redisTimeVal(long sec, long usec) {
-	struct timeval t = { sec, usec };
-	return t;
-}
+typedef struct redisEvent {
 
-int redisGetReplyType(redisReply *r) {
-	return r->type;
-}
+} redisEvent;
 
-redisReply *redisReplyGetElement(redisReply *el, int i) {
-	return el->element[i];
-}
+// Redis events with goroutines.
+typedef struct redisGoroutineEvents {
+	redisAsyncContext *context;
+} redisGoroutineEvents;
+
+int redisGetReplyType(redisReply *);
+
+struct timeval redisTimeVal(long, long);
+void getCallback(redisAsyncContext *, void *, void *);
+
+int redisGetReplyType(redisReply *);
+int redisAsyncCommandArgvWrapper(redisAsyncContext *, void *, void *, int, const char **, const size_t *);
+redisReply *redisReplyGetElement(redisReply *, int i);
+
+int redisGoroutineAttach(redisAsyncContext *ac, redisEvent *);
+void redisGoroutineWriteEvent(void *arg);
+void redisGoroutineReadEvent(void *arg);
 
 */
 import "C"
@@ -68,20 +76,160 @@ import (
 	"unsafe"
 )
 
-func timeVal(timeout time.Duration) C.struct_timeval {
+const (
+	pollWait = 100
+)
+
+// Error messages
+var (
+	ErrFailedAllocation    = errors.New(`Got memory allocation problem.`)
+	ErrNilReply            = errors.New(`Received a nil response.`)
+	ErrNotConnected        = errors.New(`Client is not connected.`)
+	ErrMissingCommand      = errors.New(`Missing command.`)
+	ErrUnexpectedResponse  = errors.New(`Unexpected response from server.`)
+	ErrExpectingPairs      = errors.New(`Expecting (field -> value) pairs.`)
+	ErrNonBlockingRequired = errors.New(`This command requires a non-blocking connection.`)
+	ErrMissingDestination  = errors.New(`Missing destination.`)
+	ErrInvalidDestination  = errors.New(`Destination must be a pointer.`)
+)
+
+// Workaround for creating a C's struct timeval.
+func cStructTimeval(timeout time.Duration) C.struct_timeval {
 	return C.redisTimeVal(C.long(int64(timeout/time.Second)), C.long(int64(timeout%time.Millisecond)))
 }
 
 // A redis client
 type Client struct {
-	ctx *C.redisContext
+	ctx   *C.redisContext
+	async *C.redisAsyncContext
+	ev    *C.redisEvent
+	loop  bool
+}
+
+var fdev map[int]map[int]func()
+
+func init() {
+
+	fdev = map[int]map[int]func(){
+		'r': make(map[int]func()),
+		'w': make(map[int]func()),
+	}
+
+	startServer()
 }
 
 // Creates a new redis client.
 func New() *Client {
 	self := &Client{}
 	self.ctx = nil
+	self.ev = nil
+	self.async = nil
 	return self
+}
+
+//export redisEventAddWrite
+func redisEventAddWrite(evptr unsafe.Pointer) {
+	ev := (*C.redisGoroutineEvents)(evptr)
+	ctx := (*C.redisContext)(&ev.context.c)
+	fd := int(ctx.fd)
+
+	fdev['w'][fd] = func() {
+		C.redisGoroutineWriteEvent(unsafe.Pointer(ev))
+	}
+
+	pollserver.WaitWrite(fd)
+}
+
+//export redisEventDelWrite
+func redisEventDelWrite(evptr unsafe.Pointer) {
+	ev := (*C.redisGoroutineEvents)(evptr)
+	ctx := (*C.redisContext)(&ev.context.c)
+	fd := int(ctx.fd)
+	fdev['w'][fd] = nil
+	delete(fdev['w'], fd)
+	pollserver.EvictWrite(fd)
+
+}
+
+//export redisEventDelRead
+func redisEventDelRead(evptr unsafe.Pointer) {
+	ev := (*C.redisGoroutineEvents)(evptr)
+	ctx := (*C.redisContext)(&ev.context.c)
+	fd := int(ctx.fd)
+	fdev['r'][fd] = nil
+	delete(fdev['r'], fd)
+	pollserver.EvictRead(fd)
+}
+
+//export redisEventCleanup
+func redisEventCleanup(evptr unsafe.Pointer) {
+	ev := (*C.redisGoroutineEvents)(evptr)
+	ctx := (*C.redisContext)(&ev.context.c)
+	fd := int(ctx.fd)
+	delete(fdev['r'], fd)
+	delete(fdev['w'], fd)
+	pollserver.EvictRead(fd)
+	pollserver.EvictWrite(fd)
+}
+
+//export redisEventAddRead
+func redisEventAddRead(evptr unsafe.Pointer) {
+	ev := (*C.redisGoroutineEvents)(evptr)
+	ctx := (*C.redisContext)(&ev.context.c)
+	fd := int(ctx.fd)
+
+	fdev['r'][fd] = func() {
+		C.redisGoroutineReadEvent(unsafe.Pointer(ev))
+	}
+	pollserver.WaitRead(fd)
+}
+
+//export asyncReceive
+func asyncReceive(a unsafe.Pointer, b unsafe.Pointer) {
+	if b != nil {
+		(*(*func(unsafe.Pointer))(unsafe.Pointer(&b)))(a)
+	}
+}
+
+// Creates a simple connection.
+func (self *Client) simpleConnect(ctx *C.redisContext) error {
+
+	if ctx == nil {
+		return ErrFailedAllocation
+	} else if ctx.err > 0 {
+		err := errors.New(C.GoString(&ctx.errstr[0]))
+		C.redisFree(ctx)
+		return err
+	}
+
+	self.ctx = ctx
+
+	self.async = nil
+
+	return nil
+}
+
+// Creates an asynchronous connection.
+func (self *Client) asyncConnect(ctx *C.redisContext) error {
+
+	err := self.simpleConnect(ctx)
+
+	if err != nil {
+		return err
+	}
+
+	self.async = C.redisAsyncInitialize(self.ctx)
+
+	if self.async == nil {
+		C.redisFree(self.ctx)
+		return ErrFailedAllocation
+	}
+
+	C.__redisAsyncCopyError(self.async)
+
+	C.redisGoroutineAttach(self.async, self.ev)
+
+	return nil
 }
 
 // Connects the client to the given host and port.
@@ -97,21 +245,12 @@ func (self *Client) Connect(host string, port uint) error {
 
 	C.free(unsafe.Pointer(chost))
 
-	if ctx == nil {
-		return errors.New("Could not allocate redis context.")
-	} else if ctx.err > 0 {
-		err := errors.New(C.GoString(&ctx.errstr[0]))
-		C.redisFree(ctx)
-		return err
-	}
-
-	self.ctx = ctx
-
-	return nil
+	return self.simpleConnect(ctx)
 }
 
 // Creates a non-blocking connection with the given host and port.
 func (self *Client) ConnectNonBlock(host string, port uint) error {
+
 	var ctx *C.redisContext
 
 	chost := C.CString(host)
@@ -123,21 +262,12 @@ func (self *Client) ConnectNonBlock(host string, port uint) error {
 
 	C.free(unsafe.Pointer(chost))
 
-	if ctx == nil {
-		return errors.New("Could not allocate redis context.")
-	} else if ctx.err > 0 {
-		err := errors.New(C.GoString(&ctx.errstr[0]))
-		C.redisFree(ctx)
-		return err
-	}
-
-	self.ctx = ctx
-
-	return nil
+	return self.asyncConnect(ctx)
 }
 
 // Connects to the given host and port, giving up after timeout.
 func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
+
 	var ctx *C.redisContext
 
 	chost := C.CString(host)
@@ -145,22 +275,12 @@ func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Dura
 	ctx = C.redisConnectWithTimeout(
 		chost,
 		C.int(port),
-		timeVal(timeout),
+		cStructTimeval(timeout),
 	)
 
 	C.free(unsafe.Pointer(chost))
 
-	if ctx == nil {
-		return errors.New("Could not allocate redis context.")
-	} else if ctx.err > 0 {
-		err := errors.New(C.GoString(&ctx.errstr[0]))
-		C.redisFree(ctx)
-		return err
-	}
-
-	self.ctx = ctx
-
-	return nil
+	return self.simpleConnect(ctx)
 }
 
 // Creates a non-blocking connection between the client and the given UNIX
@@ -176,17 +296,7 @@ func (self *Client) ConnectUnixNonBlock(path string) error {
 
 	C.free(unsafe.Pointer(cpath))
 
-	if ctx == nil {
-		return errors.New("Could not allocate redis context.")
-	} else if ctx.err > 0 {
-		err := errors.New(C.GoString(&ctx.errstr[0]))
-		C.redisFree(ctx)
-		return err
-	}
-
-	self.ctx = ctx
-
-	return nil
+	return self.asyncConnect(ctx)
 }
 
 // Connects the client to the given UNIX socket.
@@ -201,17 +311,7 @@ func (self *Client) ConnectUnix(path string) error {
 
 	C.free(unsafe.Pointer(cpath))
 
-	if ctx == nil {
-		return errors.New("Could not allocate redis context.")
-	} else if ctx.err > 0 {
-		err := errors.New(C.GoString(&ctx.errstr[0]))
-		C.redisFree(ctx)
-		return err
-	}
-
-	self.ctx = ctx
-
-	return nil
+	return self.simpleConnect(ctx)
 }
 
 // Connects the client to the given UNIX socket, giving up after timeout.
@@ -222,22 +322,12 @@ func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) e
 
 	ctx = C.redisConnectUnixWithTimeout(
 		cpath,
-		timeVal(timeout),
+		cStructTimeval(timeout),
 	)
 
 	C.free(unsafe.Pointer(cpath))
 
-	if ctx == nil {
-		return errors.New("Could not allocate redis context.")
-	} else if ctx.err > 0 {
-		err := errors.New(C.GoString(&ctx.errstr[0]))
-		C.redisFree(ctx)
-		return err
-	}
-
-	self.ctx = ctx
-
-	return nil
+	return self.simpleConnect(ctx)
 }
 
 func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
@@ -343,10 +433,11 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 		}
 	case C.REDIS_REPLY_NIL:
 		v.Set(reflect.Zero(v.Type()))
-		return errors.New("Received NIL response.")
+		return ErrNilReply
 	default:
 		return fmt.Errorf("Unknown redis reply type: %v", C.redisGetReplyType(reply))
 	}
+
 	return nil
 }
 
@@ -364,11 +455,16 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 }
 
 func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte) error {
+
 	var i int
 	var err error
 
 	if self.ctx == nil {
-		return errors.New("This client is not connected")
+		return ErrNotConnected
+	}
+
+	if len(values) < 1 {
+		return ErrMissingCommand
 	}
 
 	argc := len(values)
@@ -380,75 +476,101 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 		argvlen[i] = C.size_t(len(values[i]))
 	}
 
-	raw := C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+	if self.async == nil {
 
-	defer C.freeReplyObject(raw)
+		// Using panic() because we don't really want the user to try subscribing
+		// on a blocking conection as it may produce some difficult to catch bugs.
+		panic(ErrNonBlockingRequired.Error())
+		//return ErrNonBlockingRequired
 
-	for i = 0; i < len(argv); i++ {
-		C.free(unsafe.Pointer(argv[i]))
-	}
+	} else {
 
-	var reply C.redisReply
+		self.loop = false
 
-	ptr := unsafe.Pointer(&reply)
+		ok := make(chan *C.redisReply)
 
-	for {
-
-		if self.ctx == nil {
-			return errors.New("Connection lost.")
+		var fn = func(r unsafe.Pointer) {
+			if self.loop {
+				ok <- (*C.redisReply)(unsafe.Pointer(r))
+			} else {
+				ok <- nil
+			}
 		}
 
-		if C.redisGetReply(self.ctx, &ptr) != C.REDIS_OK {
-			break
+		var asyncReceiveCallback = asyncReceive
+		var ptr = unsafe.Pointer(&asyncReceiveCallback)
+		var fnptr = unsafe.Pointer(&fn)
+
+		self.loop = true
+
+		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+
+		for i = 0; i < len(argv); i++ {
+			C.free(unsafe.Pointer(argv[i]))
 		}
 
-		if ptr == nil {
-			return errors.New("Received unexpected nil pointer.\n")
-			continue
+		if wait != C.REDIS_OK {
+			return ErrUnexpectedResponse
 		}
 
-		switch C.redisGetReplyType(&reply) {
-		/*
-			case C.REDIS_REPLY_STRING:
-			case C.REDIS_REPLY_ARRAY:
-			case C.REDIS_REPLY_INTEGER:
-			case C.REDIS_REPLY_NIL:
-			case C.REDIS_REPLY_STATUS:
-		*/
-		case C.REDIS_REPLY_ERROR:
-			return errors.New(C.GoString((&reply).str))
+		for self.loop {
+
+			select {
+
+			case res := <-ok:
+
+				if res == nil {
+					return ErrUnexpectedResponse
+				}
+
+				ptr := (unsafe.Pointer)(res)
+
+				switch C.redisGetReplyType(res) {
+				case C.REDIS_REPLY_ERROR:
+					return ErrUnexpectedResponse
+				}
+
+				if dest == nil {
+					return ErrMissingDestination
+				}
+
+				rv := reflect.ValueOf(dest)
+
+				if rv.Kind() != reflect.Ptr || rv.IsNil() {
+					return ErrInvalidDestination
+				}
+
+				err = setReplyValue(rv.Elem(), ptr)
+
+				C.freeReplyObject(ptr)
+
+				if err != nil {
+					return err
+				}
+
+				c <- reflect.Indirect(rv).Interface().([]string)
+
+			}
 		}
-
-		if dest == nil {
-			return nil
-		}
-
-		rv := reflect.ValueOf(dest)
-
-		if rv.Kind() != reflect.Ptr || rv.IsNil() {
-			return fmt.Errorf("Destination is not a pointer: %v\n", rv)
-		}
-
-		err = setReplyValue(rv.Elem(), ptr)
-
-		C.freeReplyObject(ptr)
-
-		if err != nil {
-			return err
-		}
-
-		c <- reflect.Indirect(rv).Interface().([]string)
 	}
 
 	return nil
 }
 
 func (self *Client) command(dest interface{}, values ...[]byte) error {
+
 	var i int
+	var reply *C.redisReply
 
 	if self.ctx == nil {
-		return errors.New("This client is not connected")
+		return ErrNotConnected
 	}
+
+	if len(values) < 1 {
+		return ErrMissingCommand
+	}
+
+	command := strings.ToUpper(string(values[0]))
 
 	argc := len(values)
 	argv := make([](*C.char), argc)
@@ -459,16 +581,49 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 		argvlen[i] = C.size_t(len(values[i]))
 	}
 
-	reply := (*C.redisReply)(C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0])))
+	defer func() {
+		if reply != nil {
+			C.freeReplyObject(unsafe.Pointer(reply))
+		}
+		for i = 0; i < len(argv); i++ {
+			C.free(unsafe.Pointer(argv[i]))
+		}
+	}()
 
-	defer C.freeReplyObject(unsafe.Pointer(reply))
+	if self.async == nil {
 
-	for i = 0; i < len(argv); i++ {
-		C.free(unsafe.Pointer(argv[i]))
+		reply = (*C.redisReply)(C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0])))
+
+	} else {
+
+		ok := make(chan *C.redisReply)
+
+		var fn = func(r unsafe.Pointer) {
+			ok <- (*C.redisReply)(unsafe.Pointer(r))
+		}
+
+		var asyncReceiveCallback = asyncReceive
+		var ptr = unsafe.Pointer(&asyncReceiveCallback)
+		var fnptr = unsafe.Pointer(&fn)
+
+		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+
+		if wait != C.REDIS_OK {
+			return ErrUnexpectedResponse
+		}
+
+		if command == "UNSUBSCRIBE" || command == "PUNSUBSCRIBE" {
+			return nil
+		}
+
+		reply = <-ok
 	}
 
-	switch C.redisGetReplyType(reply) {
-	case C.REDIS_REPLY_ERROR:
+	if reply == nil {
+		return ErrNilReply
+	}
+
+	if C.redisGetReplyType(reply) == C.REDIS_REPLY_ERROR {
 		return errors.New(C.GoString(reply.str))
 	}
 
@@ -479,7 +634,7 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 	rv := reflect.ValueOf(dest)
 
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return fmt.Errorf("Destination is not a pointer: %v\n", rv)
+		return ErrInvalidDestination
 	}
 
 	return setReplyValue(rv.Elem(), unsafe.Pointer(reply))
@@ -1273,7 +1428,7 @@ func (self *Client) HMSet(key string, values ...interface{}) (string, error) {
 	var ret string
 
 	if len(values)%2 != 0 {
-		return "", errors.New("Expecting field -> value pairs.")
+		return "", ErrExpectingPairs
 	}
 
 	args := make([][]byte, len(values)+2)
@@ -1479,7 +1634,7 @@ func (self *Client) LInsert(key string, where string, pivot interface{}, value i
 	where = strings.ToUpper(where)
 
 	if where != "AFTER" && where != "BEFORE" {
-		return 0, errors.New("The `where` value must be either BEFORE or AFTER.")
+		return 0, errors.New(`The "where" value must be either BEFORE or AFTER.`)
 	}
 
 	err := self.command(
@@ -1732,7 +1887,7 @@ func (self *Client) MSet(values ...interface{}) (string, error) {
 	var ret string
 
 	if len(values)%2 != 0 {
-		return "", errors.New("Expecting field -> value pairs.")
+		return "", ErrExpectingPairs
 	}
 
 	args := make([][]byte, len(values)+1)
@@ -1757,7 +1912,7 @@ func (self *Client) MSetNX(values ...interface{}) (bool, error) {
 	var ret bool
 
 	if len(values)%2 != 0 {
-		return false, errors.New("Expecting field -> value pairs.")
+		return false, ErrExpectingPairs
 	}
 
 	args := make([][]byte, len(values)+1)
@@ -1974,6 +2129,8 @@ http://redis.io/commands/punsubscribe
 func (self *Client) PUnsubscribe(pattern ...string) (string, error) {
 	var ret string
 
+	self.loop = false
+
 	args := make([][]byte, len(pattern)+1)
 	args[0] = []byte("PUNSUBSCRIBE")
 
@@ -1994,17 +2151,35 @@ http://redis.io/commands/quit
 */
 func (self *Client) Quit() (string, error) {
 
+	self.loop = false
+
 	if self.ctx != nil {
-		go self.command(
-			nil,
-			[]byte("QUIT"),
-		)
-		C.redisFree(self.ctx)
+
+		if self.async != nil {
+
+			// Killing the connection ourselves.
+			C.redisAsyncDisconnect(self.async)
+			// There is no need to manually redisAsyncFree() self.async, it will take
+			// care of itself.
+
+		} else {
+
+			// Request the server to close the connection.
+			self.command(
+				nil,
+				[]byte("QUIT"),
+			)
+
+			C.redisFree(self.ctx)
+		}
+
+		self.async = nil
 		self.ctx = nil
+
 		return "", nil
 	}
 
-	return "", errors.New("This client is not connected.")
+	return "", ErrNotConnected
 }
 
 /*
@@ -2884,6 +3059,8 @@ given.
 http://redis.io/commands/unsubscribe
 */
 func (self *Client) Unsubscribe(channel ...string) error {
+
+	self.loop = false
 
 	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("UNSUBSCRIBE")

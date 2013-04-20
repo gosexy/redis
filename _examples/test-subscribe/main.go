@@ -1,8 +1,8 @@
 package main
 
 import (
-	"menteslibres.net/gosexy/redis"
 	"log"
+	"menteslibres.net/gosexy/redis"
 	"strings"
 )
 
@@ -29,7 +29,7 @@ func main() {
 
 	consumer = redis.New()
 
-	err = consumer.Connect(host, port)
+	err = consumer.ConnectNonBlock(host, port)
 
 	if err != nil {
 		log.Fatalf("Consumer failed to connect: %s\n", err.Error())
@@ -43,7 +43,7 @@ func main() {
 	log.Printf("Consumer is now inside a go-routine.\n")
 	go consumer.Subscribe(rec, "channel")
 
-	log.Printf("Publishing in another go-routine\n")
+	log.Printf("Publisher will send messages in another go-routine\n")
 
 	go func() {
 		publisher.Publish("channel", "Hello world!")
@@ -54,13 +54,15 @@ func main() {
 		}
 	}()
 
-	log.Printf("Waiting for rec channel. Ctrl + C to quit.\n")
+	log.Printf("Reading subscription...\n")
 	var ls []string
 
-	for {
+	for j := 0; j < 6; j++ {
 		ls = <-rec
 		log.Printf("Consumer received: %v\n", strings.Join(ls, ", "))
 	}
+
+	log.Printf("Done, quitting.\n")
 
 	consumer.Quit()
 	publisher.Quit()
