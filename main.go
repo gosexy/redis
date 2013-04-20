@@ -82,12 +82,15 @@ const (
 
 // Error messages
 var (
-	ErrFailedAllocation   = errors.New(`Got memory allocation problem.`)
-	ErrNilReply           = errors.New(`Received a nil response.`)
-	ErrNotConnected       = errors.New(`Client is not connected.`)
-	ErrMissingCommand     = errors.New(`Missing command.`)
-	ErrUnexpectedResponse = errors.New(`Unexpected response from server.`)
-	ErrExpectingPairs     = errors.New(`Expecting (field -> value) pairs.`)
+	ErrFailedAllocation    = errors.New(`Got memory allocation problem.`)
+	ErrNilReply            = errors.New(`Received a nil response.`)
+	ErrNotConnected        = errors.New(`Client is not connected.`)
+	ErrMissingCommand      = errors.New(`Missing command.`)
+	ErrUnexpectedResponse  = errors.New(`Unexpected response from server.`)
+	ErrExpectingPairs      = errors.New(`Expecting (field -> value) pairs.`)
+	ErrNonBlockingRequired = errors.New(`This command requires a non-blocking connection.`)
+	ErrMissingDestination  = errors.New(`Missing destination.`)
+	ErrInvalidDestination  = errors.New(`Destination must be a pointer.`)
 )
 
 // Workaround for creating a C's struct timeval.
@@ -454,8 +457,6 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte) error {
 
 	var i int
-	var reply C.redisReply
-	var raw unsafe.Pointer
 	var err error
 
 	if self.ctx == nil {
@@ -465,8 +466,6 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 	if len(values) < 1 {
 		return ErrMissingCommand
 	}
-
-	command := strings.ToUpper(string(values[0]))
 
 	argc := len(values)
 	argv := make([](*C.char), argc)
@@ -479,7 +478,7 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 
 	if self.async == nil {
 
-		raw = C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+		return ErrNonBlockingRequired
 
 	} else {
 
@@ -501,12 +500,11 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 
 		self.loop = true
 
-		if command == "QUIT" {
-			self.loop = false
-			fn = nil
-		}
-
 		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+
+		for i = 0; i < len(argv); i++ {
+			C.free(unsafe.Pointer(argv[i]))
+		}
 
 		if wait != C.REDIS_OK {
 			return ErrUnexpectedResponse
@@ -519,24 +517,24 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 			case res := <-ok:
 
 				if res == nil {
-					return nil
+					return ErrUnexpectedResponse
 				}
 
 				ptr := (unsafe.Pointer)(res)
 
 				switch C.redisGetReplyType(res) {
 				case C.REDIS_REPLY_ERROR:
-					return nil
+					return ErrUnexpectedResponse
 				}
 
 				if dest == nil {
-					return nil
+					return ErrMissingDestination
 				}
 
 				rv := reflect.ValueOf(dest)
 
 				if rv.Kind() != reflect.Ptr || rv.IsNil() {
-					return nil
+					return ErrInvalidDestination
 				}
 
 				err = setReplyValue(rv.Elem(), ptr)
@@ -544,68 +542,13 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 				C.freeReplyObject(ptr)
 
 				if err != nil {
-					return nil
+					return err
 				}
 
 				c <- reflect.Indirect(rv).Interface().([]string)
 
 			}
 		}
-
-		return nil
-
-	}
-
-	defer func() {
-		if raw != nil {
-			C.freeReplyObject(raw)
-		}
-	}()
-
-	for i = 0; i < len(argv); i++ {
-		C.free(unsafe.Pointer(argv[i]))
-	}
-
-	ptr := unsafe.Pointer(&reply)
-
-	for {
-
-		if self.ctx == nil {
-			return ErrNotConnected
-		}
-
-		if C.redisGetReply(self.ctx, &ptr) != C.REDIS_OK {
-			break
-		}
-
-		if ptr == nil {
-			return ErrUnexpectedResponse
-		}
-
-		if C.redisGetReplyType(&reply) == C.REDIS_REPLY_ERROR {
-			return errors.New(C.GoString((&reply).str))
-		}
-
-		if dest == nil {
-			return nil
-		}
-
-		rv := reflect.ValueOf(dest)
-
-		if rv.Kind() != reflect.Ptr || rv.IsNil() {
-			return fmt.Errorf("Destination is not a pointer: %v\n", rv)
-		}
-
-		err = setReplyValue(rv.Elem(), ptr)
-
-		C.freeReplyObject(ptr)
-
-		if err != nil {
-			return err
-		}
-
-		c <- reflect.Indirect(rv).Interface().([]string)
-
 	}
 
 	return nil
@@ -635,6 +578,15 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 		argvlen[i] = C.size_t(len(values[i]))
 	}
 
+	defer func() {
+		if reply != nil {
+			C.freeReplyObject(unsafe.Pointer(reply))
+		}
+		for i = 0; i < len(argv); i++ {
+			C.free(unsafe.Pointer(argv[i]))
+		}
+	}()
+
 	if self.async == nil {
 
 		reply = (*C.redisReply)(C.redisCommandArgv(self.ctx, C.int(argc), &argv[0], (*C.size_t)(&argvlen[0])))
@@ -647,17 +599,11 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 			ok <- (*C.redisReply)(unsafe.Pointer(r))
 		}
 
-		if command == "QUIT" {
-			fn = nil
-		}
-
 		var asyncReceiveCallback = asyncReceive
 		var ptr = unsafe.Pointer(&asyncReceiveCallback)
 		var fnptr = unsafe.Pointer(&fn)
 
-		var wait C.int
-
-		wait = C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
 
 		if wait != C.REDIS_OK {
 			return ErrUnexpectedResponse
@@ -668,16 +614,6 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 		}
 
 		reply = <-ok
-	}
-
-	defer func() {
-		if reply != nil {
-			C.freeReplyObject(unsafe.Pointer(reply))
-		}
-	}()
-
-	for i = 0; i < len(argv); i++ {
-		C.free(unsafe.Pointer(argv[i]))
 	}
 
 	if reply == nil {
@@ -695,7 +631,7 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 	rv := reflect.ValueOf(dest)
 
 	if rv.Kind() != reflect.Ptr || rv.IsNil() {
-		return fmt.Errorf("Destination is not a pointer: %v\n", rv)
+		return ErrInvalidDestination
 	}
 
 	return setReplyValue(rv.Elem(), unsafe.Pointer(reply))
