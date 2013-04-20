@@ -478,7 +478,10 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 
 	if self.async == nil {
 
-		return ErrNonBlockingRequired
+		// Using panic() because we don't really want the user to try subscribing
+		// on a blocking conection as it may produce some difficult to catch bugs.
+		panic(ErrNonBlockingRequired.Error())
+		//return ErrNonBlockingRequired
 
 	} else {
 
