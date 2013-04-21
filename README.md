@@ -1,7 +1,7 @@
 # gosexy/redis
 
 This package provides Go bindings for the official [Redis][1] client,
-[hiredis][2] and [benchmarking][8] tools for comparing different Go redis
+[hiredis][2], and [benchmarking][8] tools for comparing different Go redis
 clients.
 
 The complete set of commands for the 2.6.10 release is supported.
