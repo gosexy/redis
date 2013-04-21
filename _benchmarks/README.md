@@ -39,11 +39,11 @@ Test #1
 
 Test #2
 
-<img src="results/20130420/cpu1-mem512/redis-benchmarks-2.png" width="200" />
+<img src="results/20130420/cpu1-mem512/redis-benchmarks-2.png" width="800" />
 
 Test #3
 
-<img src="results/20130420/cpu1-mem512/redis-benchmarks-3.png" width="200" />
+<img src="results/20130420/cpu1-mem512/redis-benchmarks-3.png" width="800" />
 
 Exhibit B: OSX host 4G ram, 4 cores 2.3GHz.
 
@@ -53,22 +53,25 @@ Test #1
 
 Test #2
 
-<img src="results/20130420/cpu4-mem4/redis-benchmarks-2.png" width="200" />
+<img src="results/20130420/cpu4-mem4/redis-benchmarks-2.png" width="800" />
 
 Test #3
 
-<img src="results/20130420/cpu4-mem4/redis-benchmarks-3.png" width="200" />
+<img src="results/20130420/cpu4-mem4/redis-benchmarks-3.png" width="800" />
 
 Exhibit C: Debian virtual machine 16G ram, 8 cores 2GHz (qemu).
 
 Test #1
+
 <img src="results/20130420/cpu8-mem16/redis-benchmarks-1.png" width="800" />
 
 Test #2
-<img src="results/20130420/cpu8-mem16/redis-benchmarks-2.png" width="200" />
+
+<img src="results/20130420/cpu8-mem16/redis-benchmarks-2.png" width="800" />
 
 Test #3
-<img src="results/20130420/cpu8-mem16/redis-benchmarks-3.png" width="200" />
+
+<img src="results/20130420/cpu8-mem16/redis-benchmarks-3.png" width="800" />
 
 ## How to reproduce benchmarking
 
