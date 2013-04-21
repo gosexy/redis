@@ -1,8 +1,11 @@
 # gosexy/redis
 
-Go bindings for the official [Redis][1] client, [hiredis][2].
+This package provides Go bindings for the official [Redis][1] client,
+[hiredis][2].
 
 The complete set of commands for the 2.6.10 release is supported.
+
+This package also includes tools for [benchmarking][8] Go redis clients.
 
 ## How to install
 
@@ -240,3 +243,4 @@ friendly license:
 [5]: http://godoc.org
 [6]: http://godoc.org/menteslibres.net/gosexy/redis
 [7]: http://redis.io/commands
+[8]: https://github.com/gosexy/redis/tree/master/_benchmarks
