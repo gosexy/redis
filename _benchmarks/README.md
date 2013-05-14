@@ -1,4 +1,4 @@
-# Benchmarks
+# Benchmarking Go drivers for redis
 
 A comparison between well known Go drivers for redis.
 
@@ -10,11 +10,11 @@ own host.
 
 Please see [getong's blog][1] for a related blog post.
 
-## Benchmarking graphs
+## Results
 
-Ubuntu 12.10 x64
-Go version 1.1 (May 13, 2013)
-Redis server 2.4.15
+* Ubuntu 12.10 x64
+* Go version 1.1 (May 13, 2013)
+* Redis server 2.4.15
 
 ```
 # redis.conf
