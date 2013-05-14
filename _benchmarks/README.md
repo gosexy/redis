@@ -1,9 +1,9 @@
 # Benchmarks
 
-Here are some benchmarks for different Go redis clients.
+A comparison between well known Go drivers for redis.
 
 Benchmarks should not be taken as ultimate proofs of how a program or library
-behaves as they may throw mixed results across different hosts.
+behaves as they may throw mixed results across different hosts and settings.
 
 You can use the available benchmarking tools to reproduce these results in your
 own host.
@@ -12,16 +12,15 @@ Please see [getong's blog][1] for a related blog post.
 
 ## Benchmarking graphs
 
-Published benchmarks results use latest available version (as of Apr 20, 2013)
-of all the tested libraries.
-
-Tests were against a redis 2.6.12 server with these settings modified in order
-to keep the noise at the minimum:
+Ubuntu 12.10 x64
+Go version 1.1 (May 13, 2013)
+Redis server 2.4.15
 
 ```
 # redis.conf
 loglevel warning
-save ""
+# Saving to disk disabled.
+# save 900
 ```
 
 Each colored line represent a library executing one function
@@ -31,47 +30,34 @@ server.
 The height of the line represent the average time in nanoseconds the function
 took to execute.
 
-Exhibit A: Debian virtual machine 256Mb ram, 1 core 2GHz (qemu).
+Exhibit A: 4G RAM, 2 cores 2GHz (qemu).
 
 Test #1
 
-<img src="results/20130420/cpu1-mem512/redis-benchmarks-1.png" width="800" />
+<img src="results/20130513/cpu2-mem4/redis-benchmarks-1.png" width="800" />
 
 Test #2
 
-<img src="results/20130420/cpu1-mem512/redis-benchmarks-2.png" width="800" />
+<img src="results/20130513/cpu2-mem4/redis-benchmarks-2.png" width="800" />
 
 Test #3
 
-<img src="results/20130420/cpu1-mem512/redis-benchmarks-3.png" width="800" />
+<img src="results/20130513/cpu2-mem4/redis-benchmarks-3.png" width="800" />
 
-Exhibit B: OSX host 4G ram, 4 cores 2.3GHz.
+
+Exhibit B: 16G RAM, 8 cores 2GHz (qemu).
 
 Test #1
 
-<img src="results/20130420/cpu4-mem4/redis-benchmarks-1.png" width="800" />
+<img src="results/20130513/cpu8-mem16/redis-benchmarks-1.png" width="800" />
 
 Test #2
 
-<img src="results/20130420/cpu4-mem4/redis-benchmarks-2.png" width="800" />
+<img src="results/20130513/cpu8-mem16/redis-benchmarks-2.png" width="800" />
 
 Test #3
 
-<img src="results/20130420/cpu4-mem4/redis-benchmarks-3.png" width="800" />
-
-Exhibit C: Debian virtual machine 16G ram, 8 cores 2GHz (qemu).
-
-Test #1
-
-<img src="results/20130420/cpu8-mem16/redis-benchmarks-1.png" width="800" />
-
-Test #2
-
-<img src="results/20130420/cpu8-mem16/redis-benchmarks-2.png" width="800" />
-
-Test #3
-
-<img src="results/20130420/cpu8-mem16/redis-benchmarks-3.png" width="800" />
+<img src="results/20130513/cpu8-mem16/redis-benchmarks-3.png" width="800" />
 
 ## How to reproduce benchmarking
 
