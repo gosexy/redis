@@ -371,6 +371,9 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 		case reflect.Uint64:
 			// string -> uint64
 			v.Set(reflect.ValueOf(to.Uint64(s)))
+		case reflect.Bool:
+			// string -> bool
+			v.Set(reflect.ValueOf(to.Bool(s)))
 		default:
 			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
 		}
