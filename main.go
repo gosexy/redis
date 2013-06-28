@@ -371,6 +371,9 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 		case reflect.Uint64:
 			// string -> uint64
 			v.Set(reflect.ValueOf(to.Uint64(s)))
+		case reflect.Bool:
+			// string -> bool
+			v.Set(reflect.ValueOf(to.Bool(s)))
 		default:
 			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
 		}
@@ -755,13 +758,15 @@ non-empty, with the given keys being checked in the order that they are given.
 http://redis.io/commands/blpop
 */
 func (self *Client) BLPop(timeout uint64, keys ...string) ([]string, error) {
-	var i int
 	var ret []string
 	args := make([][]byte, len(keys)+2)
 	args[0] = []byte("BLPOP")
 
-	for i, key := range keys {
-		args[1+i] = to.Bytes(key)
+	i := 0
+
+	for _, key := range keys {
+		i += 1
+		args[i] = to.Bytes(key)
 	}
 
 	args[1+i] = to.Bytes(timeout)
@@ -779,14 +784,16 @@ non-empty, with the given keys being checked in the order that they are given.
 http://redis.io/commands/brpop
 */
 func (self *Client) BRPop(timeout uint64, keys ...string) ([]string, error) {
-	var i int
 	var ret []string
 
 	args := make([][]byte, len(keys)+2)
 	args[0] = []byte("BRPOP")
 
-	for i, key := range keys {
-		args[1+i] = to.Bytes(key)
+	i := 0
+
+	for _, key := range keys {
+		i += 1
+		args[i] = to.Bytes(key)
 	}
 	args[1+i] = to.Bytes(timeout)
 
