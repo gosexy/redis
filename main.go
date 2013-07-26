@@ -11,7 +11,6 @@
 
   The above copyright notice and this permission notice shall be
   included in all copies or substantial portions of the Software.
-
   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
   EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
   MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -1256,12 +1255,11 @@ http://redis.io/commands/hdel
 */
 func (self *Client) HDel(key string, fields ...string) (int64, error) {
 	var ret int64
-
-	args := make([][]byte, len(fields)+1)
+	args := make([][]byte, len(fields)+2)
 	args[0] = []byte("HDEL")
-
+	args[1] = []byte(key)
 	for i, _ := range fields {
-		args[1+i] = to.Bytes(fields[i])
+		args[2+i] = to.Bytes(fields[i])
 	}
 
 	err := self.command(&ret, args...)
