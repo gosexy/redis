@@ -1259,9 +1259,10 @@ func (self *Client) HDel(key string, fields ...string) (int64, error) {
 
 	args := make([][]byte, len(fields)+1)
 	args[0] = []byte("HDEL")
+	args[1] = []byte(key)
 
 	for i, _ := range fields {
-		args[1+i] = to.Bytes(fields[i])
+		args[2+i] = to.Bytes(fields[i])
 	}
 
 	err := self.command(&ret, args...)
