@@ -934,7 +934,7 @@ func TestZSet(t *testing.T) {
 	// Reverse Rank
 	i, err = client.ZRevRank("myzset", "none")
 
-	if err == nil {
+	if i != 0 {
 		t.Fatalf("Expecting error.")
 	}
 

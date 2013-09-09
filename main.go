@@ -433,8 +433,16 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 			return fmt.Errorf("Unsupported conversion: redis array to %v", v.Kind())
 		}
 	case C.REDIS_REPLY_NIL:
+		/*
+			Read here: https://github.com/gosexy/redis/issues/12
+
+			'nil' was being considered and invalid response type, but that caused
+			trouble within perfectly valid situations, so 'nil' is now an accepted
+			response type.
+		*/
 		v.Set(reflect.Zero(v.Type()))
-		return ErrNilReply
+		//return ErrNilReply
+		return nil
 	default:
 		return fmt.Errorf("Unknown redis reply type: %v", C.redisGetReplyType(reply))
 	}
