@@ -58,8 +58,11 @@
     } while(0);
 
 /* Forward declaration of function in hiredis.c */
-//void __redisAppendCommand(redisContext *c, char *cmd, size_t len);
+#ifdef CGO
 int __redisAppendCommand(redisContext *c, char *cmd, size_t len);
+#else
+void __redisAppendCommand(redisContext *c, char *cmd, size_t len);
+#endif
 
 /* Functions managing dictionary of callbacks for pub/sub. */
 static unsigned int callbackHash(const void *key) {
