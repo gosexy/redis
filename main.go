@@ -29,7 +29,7 @@
 package redis
 
 /*
-#cgo CFLAGS: -I./_hiredis
+#cgo CFLAGS: -I./_hiredis -DCGO=1
 
 #include <stdarg.h>
 #include <stdlib.h>

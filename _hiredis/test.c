@@ -8,6 +8,7 @@
 #include <unistd.h>
 #include <signal.h>
 #include <errno.h>
+#include <limits.h>
 
 #include "hiredis.h"
 
@@ -22,6 +23,7 @@ struct config {
     struct {
         const char *host;
         int port;
+        struct timeval timeout;
     } tcp;
 
     struct {
@@ -128,13 +130,13 @@ static void test_format_commands(void) {
     free(cmd);
 
     test("Format command with %%b string interpolation: ");
-    len = redisFormatCommand(&cmd,"SET %b %b","foo",3,"b\0r",3);
+    len = redisFormatCommand(&cmd,"SET %b %b","foo",(size_t)3,"b\0r",(size_t)3);
     test_cond(strncmp(cmd,"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$3\r\nb\0r\r\n",len) == 0 &&
         len == 4+4+(3+2)+4+(3+2)+4+(3+2));
     free(cmd);
 
     test("Format command with %%b and an empty string: ");
-    len = redisFormatCommand(&cmd,"SET %b %b","foo",3,"",0);
+    len = redisFormatCommand(&cmd,"SET %b %b","foo",(size_t)3,"",(size_t)0);
     test_cond(strncmp(cmd,"*3\r\n$3\r\nSET\r\n$3\r\nfoo\r\n$0\r\n\r\n",len) == 0 &&
         len == 4+4+(3+2)+4+(3+2)+4+(0+2));
     free(cmd);
@@ -180,7 +182,7 @@ static void test_format_commands(void) {
     FLOAT_WIDTH_TEST(double);
 
     test("Format command with invalid printf format: ");
-    len = redisFormatCommand(&cmd,"key:%08p %b",(void*)1234,"foo",3);
+    len = redisFormatCommand(&cmd,"key:%08p %b",(void*)1234,"foo",(size_t)3);
     test_cond(len == -1);
 
     const char *argv[3];
@@ -289,7 +291,9 @@ static void test_blocking_connection_errors(void) {
     c = redisConnect((char*)"idontexist.local", 6379);
     test_cond(c->err == REDIS_ERR_OTHER &&
         (strcmp(c->errstr,"Name or service not known") == 0 ||
-         strcmp(c->errstr,"Can't resolve: idontexist.local") == 0));
+         strcmp(c->errstr,"Can't resolve: idontexist.local") == 0 ||
+         strcmp(c->errstr,"nodename nor servname provided, or not known") == 0 ||
+         strcmp(c->errstr,"no address associated with name") == 0));
     redisFree(c);
 
     test("Returns error when the port is not open: ");
@@ -331,7 +335,7 @@ static void test_blocking_connection(struct config config) {
     freeReplyObject(reply);
 
     test("%%b String interpolation works: ");
-    reply = redisCommand(c,"SET %b %b","foo",3,"hello\x00world",11);
+    reply = redisCommand(c,"SET %b %b","foo",(size_t)3,"hello\x00world",(size_t)11);
     freeReplyObject(reply);
     reply = redisCommand(c,"GET foo");
     test_cond(reply->type == REDIS_REPLY_STRING &&
@@ -430,6 +434,30 @@ static void test_blocking_io_errors(struct config config) {
     assert(redisSetTimeout(c,tv) == REDIS_OK);
     test_cond(redisGetReply(c,&_reply) == REDIS_ERR &&
         c->err == REDIS_ERR_IO && errno == EAGAIN);
+    redisFree(c);
+}
+
+static void test_invalid_timeout_errors(struct config config) {
+    redisContext *c;
+
+    test("Set error when an invalid timeout usec value is given to redisConnectWithTimeout: ");
+
+    config.tcp.timeout.tv_sec = 0;
+    config.tcp.timeout.tv_usec = 10000001;
+
+    c = redisConnectWithTimeout(config.tcp.host, config.tcp.port, config.tcp.timeout);
+
+    test_cond(c->err == REDIS_ERR_IO);
+
+    test("Set error when an invalid timeout sec value is given to redisConnectWithTimeout: ");
+
+    config.tcp.timeout.tv_sec = (((LONG_MAX) - 999) / 1000) + 1;
+    config.tcp.timeout.tv_usec = 0;
+
+    c = redisConnectWithTimeout(config.tcp.host, config.tcp.port, config.tcp.timeout);
+
+    test_cond(c->err == REDIS_ERR_IO);
+
     redisFree(c);
 }
 
@@ -641,6 +669,7 @@ int main(int argc, char **argv) {
     cfg.type = CONN_TCP;
     test_blocking_connection(cfg);
     test_blocking_io_errors(cfg);
+    test_invalid_timeout_errors(cfg);
     if (throughput) test_throughput(cfg);
 
     printf("\nTesting against Unix socket connection (%s):\n", cfg.unix.path);

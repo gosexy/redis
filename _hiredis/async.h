@@ -118,8 +118,10 @@ int redisvAsyncCommand(redisAsyncContext *ac, redisCallbackFn *fn, void *privdat
 int redisAsyncCommand(redisAsyncContext *ac, redisCallbackFn *fn, void *privdata, const char *format, ...);
 int redisAsyncCommandArgv(redisAsyncContext *ac, redisCallbackFn *fn, void *privdata, int argc, const char **argv, const size_t *argvlen);
 
+#ifdef CGO
 redisAsyncContext *redisAsyncInitialize(redisContext *c);
 void __redisAsyncCopyError(redisAsyncContext *ac);
+#endif
 
 #ifdef __cplusplus
 }

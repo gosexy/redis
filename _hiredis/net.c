@@ -55,7 +55,7 @@
 void __redisSetError(redisContext *c, int type, const char *str);
 
 static void __redisSetErrorFromErrno(redisContext *c, int type, const char *prefix) {
-    char buf[128];
+    char buf[128] = { 0 };
     size_t len = 0;
 
     if (prefix != NULL)
@@ -113,6 +113,45 @@ static int redisSetBlocking(redisContext *c, int fd, int blocking) {
     return REDIS_OK;
 }
 
+int redisKeepAlive(redisContext *c, int interval) {
+    int val = 1;
+    int fd = c->fd;
+
+    if (setsockopt(fd, SOL_SOCKET, SO_KEEPALIVE, &val, sizeof(val)) == -1){
+        __redisSetError(c,REDIS_ERR_OTHER,strerror(errno));
+        return REDIS_ERR;
+    }
+
+#ifdef _OSX
+    val = interval;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPALIVE, &val, sizeof(val)) < 0) {
+        __redisSetError(c,REDIS_ERR_OTHER,strerror(errno));
+        return REDIS_ERR;
+    }
+#else
+    val = interval;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPIDLE, &val, sizeof(val)) < 0) {
+        __redisSetError(c,REDIS_ERR_OTHER,strerror(errno));
+        return REDIS_ERR;
+    }
+
+    val = interval/3;
+    if (val == 0) val = 1;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPINTVL, &val, sizeof(val)) < 0) {
+        __redisSetError(c,REDIS_ERR_OTHER,strerror(errno));
+        return REDIS_ERR;
+    }
+
+    val = 3;
+    if (setsockopt(fd, IPPROTO_TCP, TCP_KEEPCNT, &val, sizeof(val)) < 0) {
+        __redisSetError(c,REDIS_ERR_OTHER,strerror(errno));
+        return REDIS_ERR;
+    }
+#endif
+
+    return REDIS_OK;
+}
+
 static int redisSetTcpNoDelay(redisContext *c, int fd) {
     int yes = 1;
     if (setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &yes, sizeof(yes)) == -1) {
@@ -136,6 +175,7 @@ static int redisContextWaitReady(redisContext *c, int fd, const struct timeval *
     /* Only use timeout when not NULL. */
     if (timeout != NULL) {
         if (timeout->tv_usec > 1000000 || timeout->tv_sec > __MAX_MSEC) {
+            __redisSetErrorFromErrno(c, REDIS_ERR_IO, NULL);
             close(fd);
             return REDIS_ERR;
         }
@@ -192,7 +232,7 @@ int redisCheckSocketError(redisContext *c, int fd) {
     return REDIS_OK;
 }
 
-int redisContextSetTimeout(redisContext *c, struct timeval tv) {
+int redisContextSetTimeout(redisContext *c, const struct timeval tv) {
     if (setsockopt(c->fd,SOL_SOCKET,SO_RCVTIMEO,&tv,sizeof(tv)) == -1) {
         __redisSetErrorFromErrno(c,REDIS_ERR_IO,"setsockopt(SO_RCVTIMEO)");
         return REDIS_ERR;
@@ -204,7 +244,7 @@ int redisContextSetTimeout(redisContext *c, struct timeval tv) {
     return REDIS_OK;
 }
 
-int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct timeval *timeout) {
+int redisContextConnectTcp(redisContext *c, const char *addr, int port, const struct timeval *timeout) {
     int s, rv;
     char _port[6];  /* strlen("65535"); */
     struct addrinfo hints, *servinfo, *p;
@@ -215,9 +255,17 @@ int redisContextConnectTcp(redisContext *c, const char *addr, int port, struct t
     hints.ai_family = AF_INET;
     hints.ai_socktype = SOCK_STREAM;
 
+    /* Try with IPv6 if no IPv4 address was found. We do it in this order since
+     * in a Redis client you can't afford to test if you have IPv6 connectivity
+     * as this would add latency to every connect. Otherwise a more sensible
+     * route could be: Use IPv6 if both addresses are available and there is IPv6
+     * connectivity. */
     if ((rv = getaddrinfo(addr,_port,&hints,&servinfo)) != 0) {
-        __redisSetError(c,REDIS_ERR_OTHER,gai_strerror(rv));
-        return REDIS_ERR;
+         hints.ai_family = AF_INET6;
+         if ((rv = getaddrinfo(addr,_port,&hints,&servinfo)) != 0) {
+            __redisSetError(c,REDIS_ERR_OTHER,gai_strerror(rv));
+            return REDIS_ERR;
+        }
     }
     for (p = servinfo; p != NULL; p = p->ai_next) {
         if ((s = socket(p->ai_family,p->ai_socktype,p->ai_protocol)) == -1)
@@ -260,7 +308,7 @@ end:
     return rv;  // Need to return REDIS_OK if alright
 }
 
-int redisContextConnectUnix(redisContext *c, const char *path, struct timeval *timeout) {
+int redisContextConnectUnix(redisContext *c, const char *path, const struct timeval *timeout) {
     int s;
     int blocking = (c->flags & REDIS_BLOCK);
     struct sockaddr_un sa;

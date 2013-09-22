@@ -58,11 +58,13 @@
     } while(0);
 
 /* Forward declaration of function in hiredis.c */
+//void __redisAppendCommand(redisContext *c, char *cmd, size_t len);
 int __redisAppendCommand(redisContext *c, char *cmd, size_t len);
 
 /* Functions managing dictionary of callbacks for pub/sub. */
 static unsigned int callbackHash(const void *key) {
-    return dictGenHashFunction((unsigned char*)key,sdslen((char*)key));
+    return dictGenHashFunction((const unsigned char *)key,
+                               sdslen((const sds)key));
 }
 
 static void *callbackValDup(void *privdata, const void *src) {
@@ -76,8 +78,8 @@ static int callbackKeyCompare(void *privdata, const void *key1, const void *key2
     int l1, l2;
     ((void) privdata);
 
-    l1 = sdslen((sds)key1);
-    l2 = sdslen((sds)key2);
+    l1 = sdslen((const sds)key1);
+    l2 = sdslen((const sds)key2);
     if (l1 != l2) return 0;
     return memcmp(key1,key2,l1) == 0;
 }
@@ -101,7 +103,11 @@ static dictType callbackDict = {
     callbackValDestructor
 };
 
+#ifdef CGO
 redisAsyncContext *redisAsyncInitialize(redisContext *c) {
+#else
+static redisAsyncContext *redisAsyncInitialize(redisContext *c) {
+#endif
     redisAsyncContext *ac;
 
     ac = realloc(c,sizeof(redisAsyncContext));
@@ -140,7 +146,11 @@ redisAsyncContext *redisAsyncInitialize(redisContext *c) {
 
 /* We want the error field to be accessible directly instead of requiring
  * an indirection to the redisContext struct. */
+#ifdef CGO
 void __redisAsyncCopyError(redisAsyncContext *ac) {
+#else
+static void __redisAsyncCopyError(redisAsyncContext *ac) {
+#endif
     redisContext *c = &(ac->c);
     ac->err = c->err;
     ac->errstr = c->errstr;
@@ -440,8 +450,10 @@ void redisProcessCallbacks(redisAsyncContext *ac) {
 
         if (cb.fn != NULL) {
             __redisRunCallback(ac,&cb,reply);
-						// Let gosexy/hiredis clean this out.
-            // c->reader->fn->freeObject(reply);
+#ifndef CGO
+            // This object is freed by gosexy/redis.
+            c->reader->fn->freeObject(reply);
+#endif
 
             /* Proceed with free'ing when redisAsyncFree() was called. */
             if (c->flags & REDIS_FREEING) {

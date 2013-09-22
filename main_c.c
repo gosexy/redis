@@ -30,11 +30,11 @@
 #include "sds.h"
 #include "sds.c"
 
-#include "hiredis.h"
-#include "hiredis.c"
-
 #include "async.h"
 #include "async.c"
+
+#include "hiredis.h"
+#include "hiredis.c"
 
 #include "_cgo_export.h"
 
