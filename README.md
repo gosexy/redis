@@ -1,27 +1,26 @@
 # gosexy/redis
 
-This package provides Go bindings for the official [Redis][1] client,
-[hiredis][2], and [benchmarking][8] tools for comparing different Go redis
-clients.
+Provides Go bindings for the official C [redis][1] client ([hiredis][2]).
 
-The complete set of commands for the 2.6.10 release is supported.
-
-## How to install
+## How to install/upgrade
 
 ```
-go get menteslibres.net/gosexy/redis
+go get -u menteslibres.net/gosexy/redis
 ```
 
 ## Usage
 
-Install the package with `go get` and use `import` to include it in your project.
+Install the package with `go get` and use the `import` keyword to use it in your
+program.
 
 ```
 import "menteslibres.net/gosexy/redis"
 ```
 
-The `redis.New()` function returns a `*redis.Client` struct that you can then
-use to interact with your redis server.
+The `redis.New()` function returns a `*redis.Client` struct that you can use
+to interact with any redis server.
+
+This is a code example on how to connect and send a `PING` command.
 
 ```go
 var client *redis.Client
@@ -59,7 +58,7 @@ This is the expected output of the above
 2013/02/19 07:15:52 Received PONG!
 ```
 
-Remember to use `client.Quit()` to close the client connection.
+Always use `client.Quit()` to close the client connection.
 
 ## Examples
 
@@ -214,7 +213,7 @@ It also includes portions of code with the following license:
 The code that wraps them all, `gosexy/redis`, is released under an equally
 friendly license:
 
-> Copyright (c) 2013 José Carlos Nieto, http://xiam.menteslibres.org/
+> Copyright (c) 2013 José Carlos Nieto, https://menteslibres.net/xiam
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
