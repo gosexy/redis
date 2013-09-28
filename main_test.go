@@ -1113,7 +1113,7 @@ func TestPSubscriptions(t *testing.T) {
 }
 
 func TestTransactions(t *testing.T) {
-	var ls []string
+	var ls []interface{}
 	var err error
 	var s string
 

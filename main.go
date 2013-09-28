@@ -91,6 +91,9 @@ var (
 	ErrInvalidDestination  = errors.New(`Destination must be a pointer.`)
 )
 
+// Avoids creating reflect.TypeOf([]interface{}{}) in setReplyValue.
+var interfaceSliceType = reflect.TypeOf([]interface{}{})
+
 // Workaround for creating a C's struct timeval.
 func cStructTimeval(timeout time.Duration) C.struct_timeval {
 	return C.redisTimeVal(C.long(int64(timeout/time.Second)), C.long(int64(timeout%time.Millisecond)))
@@ -104,6 +107,7 @@ type Client struct {
 	loop  bool
 }
 
+// File descriptor event map.
 var fdev map[int]map[int]func()
 
 func init() {
@@ -374,6 +378,8 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 		case reflect.Bool:
 			// string -> bool
 			v.Set(reflect.ValueOf(to.Bool(s)))
+		case reflect.Interface:
+			v.Set(reflect.ValueOf(s))
 		default:
 			return fmt.Errorf("Unsupported conversion: redis string to %v", v.Kind())
 		}
@@ -410,15 +416,26 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 				b = true
 			}
 			v.Set(reflect.ValueOf(b))
+		case reflect.Interface:
+			v.Set(reflect.ValueOf(reply.integer))
 		default:
 			return fmt.Errorf("Unsupported conversion: redis integer (%d) to %v", reply.integer, v.Kind())
 		}
 	case C.REDIS_REPLY_ARRAY:
 		switch v.Kind() {
-		case reflect.Slice:
+		case reflect.Slice, reflect.Interface:
 			var err error
+			var elements reflect.Value
 			total := int(reply.elements)
-			elements := reflect.MakeSlice(v.Type(), total, total)
+			if v.Kind() == reflect.Interface {
+				// interface{} is not an slice, but it can hold one, however you can't just
+				// use v.Type() here, since v.Type() is reflect.TypeOf(interface{}{}). We
+				// need reflect.Type([]interface{}{}) instead.
+				elements = reflect.MakeSlice(interfaceSliceType, total, total)
+			} else {
+				// Other types must have the right element type.
+				elements = reflect.MakeSlice(v.Type(), total, total)
+			}
 			for i := 0; i < total; i++ {
 				item := C.redisReplyGetElement(reply, C.int(i))
 				err = setReplyValue(elements.Index(i), unsafe.Pointer(item))
@@ -1098,8 +1115,8 @@ connection state to normal.
 
 http://redis.io/commands/exec
 */
-func (self *Client) Exec() ([]string, error) {
-	var ret []string
+func (self *Client) Exec() ([]interface{}, error) {
+	var ret []interface{}
 	err := self.command(
 		&ret,
 		[]byte("EXEC"),
