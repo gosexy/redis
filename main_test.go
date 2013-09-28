@@ -1065,20 +1065,16 @@ func TestSubscriptions(t *testing.T) {
 		t.Fatalf("Connect failed: %v", err)
 	}
 
-	// Subscribing
 	rec := make(chan []string)
 
-	go consumer.Subscribe(rec, "channel")
-
-	var i = 0
-
-	for i < 1 {
+	go func() {
 		select {
 		case ls = <-rec:
-			t.Logf("Got: %v (%d)\n", ls, i)
-			i++
+			t.Logf("Got: %v\n", ls)
 		}
-	}
+	}()
+
+	go consumer.Subscribe(rec, "channel")
 
 	consumer.Unsubscribe("channel")
 
@@ -1094,26 +1090,22 @@ func TestPSubscriptions(t *testing.T) {
 
 	err = consumer.ConnectNonBlock(host, port)
 
-	consumer.Set("test", "TestPSubscriptions")
-
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
 	}
 
-	// Subscribing
+	consumer.Set("test", "TestPSubscriptions")
+
 	rec := make(chan []string)
 
-	go consumer.PSubscribe(rec, "channel")
-
-	var i = 0
-
-	for i < 1 {
+	go func() {
 		select {
 		case ls = <-rec:
-			t.Logf("Got: %v (%d)\n", ls, i)
-			i++
+			t.Logf("Got: %v (%d)\n", ls)
 		}
-	}
+	}()
+
+	go consumer.PSubscribe(rec, "channel")
 
 	consumer.PUnsubscribe("channel")
 

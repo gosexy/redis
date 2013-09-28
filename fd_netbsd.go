@@ -4,7 +4,7 @@
 
 // Waiting for FDs via kqueue/kevent.
 
-package net
+package redis
 
 import (
 	"os"
