@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"log"
 	"menteslibres.net/gosexy/redis"
+	"menteslibres.net/gosexy/to"
+	"reflect"
 )
 
 var host = "127.0.0.1"
@@ -42,7 +44,17 @@ func main() {
 		log.Printf(err.Error())
 	}
 
-	fmt.Printf("%v\n", res)
+	for _, el := range res {
+		switch v := el.(type) {
+		case []interface{}:
+			log.Printf("Got []interface{}")
+			for i, vv := range v {
+				log.Printf("Value at index %d (%v) has kind %s, we convert it to string: %v", i, vv, reflect.TypeOf(vv).Kind(), to.String(vv))
+			}
+		case interface{}:
+			fmt.Printf("Got value of kind %s (%v), we convert it to string: %s\n", reflect.TypeOf(v).Kind(), v, to.String(v))
+		}
+	}
 
 	client.Quit()
 
