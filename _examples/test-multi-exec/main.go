@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"menteslibres.net/gosexy/redis"
 	"menteslibres.net/gosexy/to"
@@ -52,7 +51,7 @@ func main() {
 				log.Printf("Value at index %d (%v) has kind %s, we convert it to string: %v", i, vv, reflect.TypeOf(vv).Kind(), to.String(vv))
 			}
 		case interface{}:
-			fmt.Printf("Got value of kind %s (%v), we convert it to string: %s\n", reflect.TypeOf(v).Kind(), v, to.String(v))
+			log.Printf("Got value of kind %s (%v), we convert it to string: %s\n", reflect.TypeOf(v).Kind(), v, to.String(v))
 		}
 	}
 

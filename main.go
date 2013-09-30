@@ -22,9 +22,9 @@
 */
 
 /*
-	Bindings for the official redis client, hiredis.
+	(Unofficial) bindings for the official C redis client (hiredis).
 
-	The complete set of commands for 2.6.10 is implemented.
+	Supports the complete set of commands for the 2.6 series.
 */
 package redis
 
