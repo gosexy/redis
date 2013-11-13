@@ -123,9 +123,6 @@ func init() {
 // Creates a new redis client.
 func New() *Client {
 	self := &Client{}
-	self.ctx = nil
-	self.ev = nil
-	self.async = nil
 	return self
 }
 
@@ -193,8 +190,8 @@ func asyncReceive(a unsafe.Pointer, b unsafe.Pointer) {
 	}
 }
 
-// Creates a simple connection.
-func (self *Client) simpleConnect(ctx *C.redisContext) error {
+// Associates context with client.
+func (self *Client) setContext(ctx *C.redisContext) error {
 
 	if ctx == nil {
 		return ErrFailedAllocation
@@ -214,7 +211,7 @@ func (self *Client) simpleConnect(ctx *C.redisContext) error {
 // Creates an asynchronous connection.
 func (self *Client) asyncConnect(ctx *C.redisContext) error {
 
-	err := self.simpleConnect(ctx)
+	err := self.setContext(ctx)
 
 	if err != nil {
 		return err
@@ -247,7 +244,7 @@ func (self *Client) Connect(host string, port uint) error {
 
 	C.free(unsafe.Pointer(chost))
 
-	return self.simpleConnect(ctx)
+	return self.setContext(ctx)
 }
 
 // Creates a non-blocking connection with the given host and port.
@@ -282,7 +279,7 @@ func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Dura
 
 	C.free(unsafe.Pointer(chost))
 
-	return self.simpleConnect(ctx)
+	return self.setContext(ctx)
 }
 
 // Creates a non-blocking connection between the client and the given UNIX
@@ -313,7 +310,7 @@ func (self *Client) ConnectUnix(path string) error {
 
 	C.free(unsafe.Pointer(cpath))
 
-	return self.simpleConnect(ctx)
+	return self.setContext(ctx)
 }
 
 // Connects the client to the given UNIX socket, giving up after timeout.
@@ -329,7 +326,7 @@ func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) e
 
 	C.free(unsafe.Pointer(cpath))
 
-	return self.simpleConnect(ctx)
+	return self.setContext(ctx)
 }
 
 func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {

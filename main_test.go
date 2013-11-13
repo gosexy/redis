@@ -6,8 +6,10 @@ import (
 	"time"
 )
 
-var host = "127.0.0.1"
-var port = uint(6379)
+const (
+	host = "127.0.0.1"
+	port = uint(6379)
+)
 
 var client *Client
 
