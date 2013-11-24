@@ -60,6 +60,7 @@ redisReply *redisReplyGetElement(redisReply *, int i);
 int redisGoroutineAttach(redisAsyncContext *ac, redisEvent *);
 void redisGoroutineWriteEvent(void *arg);
 void redisGoroutineReadEvent(void *arg);
+void redisForceAsyncFree(redisAsyncContext *ac);
 
 */
 import "C"
@@ -2184,12 +2185,8 @@ func (self *Client) Quit() (string, error) {
 	if self.ctx != nil {
 
 		if self.async != nil {
-
-			// Killing the connection ourselves.
-			C.redisAsyncDisconnect(self.async)
-			// There is no need to manually redisAsyncFree() self.async, it will take
-			// care of itself.
-
+			// Forcing async connection to clean without waiting for anything else.
+			C.redisForceAsyncFree(self.async)
 		} else {
 
 			// Request the server to close the connection.

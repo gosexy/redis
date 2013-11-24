@@ -125,3 +125,43 @@ int redisGoroutineAttach(redisAsyncContext *ac, struct redisEvent *ev) {
 
 	return REDIS_OK;
 }
+
+void redisForceAsyncFree(redisAsyncContext *ac) {
+	redisContext *c = &(ac->c);
+	redisCallback cb;
+	dictIterator *it;
+	dictEntry *de;
+
+	while (__redisShiftCallback(&ac->replies,&cb) == REDIS_OK)
+		__redisRunCallback(ac,&cb,NULL);
+
+	while (__redisShiftCallback(&ac->sub.invalid,&cb) == REDIS_OK)
+		__redisRunCallback(ac,&cb,NULL);
+
+	/*
+	// This chunk was hanging the freeing process.
+	it = dictGetIterator(ac->sub.channels);
+	while ((de = dictNext(it)) != NULL)
+		__redisRunCallback(ac,dictGetEntryVal(de),NULL);
+	dictReleaseIterator(it);
+	dictRelease(ac->sub.channels);
+	*/
+
+	it = dictGetIterator(ac->sub.patterns);
+	while ((de = dictNext(it)) != NULL)
+		__redisRunCallback(ac,dictGetEntryVal(de),NULL);
+	dictReleaseIterator(it);
+	dictRelease(ac->sub.patterns);
+
+	_EL_CLEANUP(ac);
+
+	if (ac->onDisconnect && (c->flags & REDIS_CONNECTED)) {
+		if (c->flags & REDIS_FREEING) {
+			ac->onDisconnect(ac,REDIS_OK);
+		} else {
+			ac->onDisconnect(ac,(ac->err == 0) ? REDIS_OK : REDIS_ERR);
+		}
+	}
+
+	redisFree(c);
+}
