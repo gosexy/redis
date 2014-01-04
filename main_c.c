@@ -50,8 +50,21 @@ void redisAsyncCatch(redisAsyncContext *c, void *r, void *privdata) {
 }
 
 // Wraps redisAsyncCommandArgv that calls redisAsyncCatch().
-int redisAsyncCommandArgvWrapper(redisAsyncContext *ac, void *fn, void *privdata, int argc, const char **argv, const size_t *argvlen) {
-	return redisAsyncCommandArgv(ac, redisAsyncCatch, privdata, argc, argv, argvlen);
+int redisAsyncCommandArgvWrapper(redisAsyncContext *ac, void *fn, int argc, const char **argv, const size_t *argvlen) {
+	return redisAsyncCommandArgv(ac, redisAsyncCatch, fn, argc, argv, argvlen);
+}
+
+void redisAsyncDisconnectCallbackWrapper(const redisAsyncContext *ac, int status) {
+	redisAsyncDisconnectCallback((redisAsyncContext *)ac, status);
+}
+
+void redisAsyncConnectCallbackWrapper(const redisAsyncContext *ac, int status) {
+	redisAsyncConnectCallback((redisAsyncContext *)ac, status);
+}
+
+void redisAsyncSetCallbacks(redisAsyncContext *ac) {
+	redisAsyncSetConnectCallback(ac, redisAsyncConnectCallbackWrapper);
+	redisAsyncSetDisconnectCallback(ac, redisAsyncDisconnectCallbackWrapper);
 }
 
 // Returns the redis reply type.
@@ -108,8 +121,9 @@ int redisGoroutineAttach(redisAsyncContext *ac, struct redisEvent *ev) {
 	redisGoroutineEvents *e;
 
 	/* Nothing should be attached when something is already attached */
-	if (ac->ev.data != NULL)
+	if (ac->ev.data != NULL) {
 		return REDIS_ERR;
+	}
 
 	/* Create container for context and r/w events */
 	e = (redisGoroutineEvents*)malloc(sizeof(*e));
@@ -127,16 +141,19 @@ int redisGoroutineAttach(redisAsyncContext *ac, struct redisEvent *ev) {
 }
 
 void redisForceAsyncFree(redisAsyncContext *ac) {
+
 	redisContext *c = &(ac->c);
 	redisCallback cb;
 	dictIterator *it;
 	dictEntry *de;
 
-	while (__redisShiftCallback(&ac->replies,&cb) == REDIS_OK)
+	while (__redisShiftCallback(&ac->replies,&cb) == REDIS_OK) {
 		__redisRunCallback(ac,&cb,NULL);
+	}
 
-	while (__redisShiftCallback(&ac->sub.invalid,&cb) == REDIS_OK)
+	while (__redisShiftCallback(&ac->sub.invalid,&cb) == REDIS_OK) {
 		__redisRunCallback(ac,&cb,NULL);
+	}
 
 	/*
 	// This chunk was hanging the freeing process.

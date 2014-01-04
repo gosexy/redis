@@ -54,13 +54,14 @@ struct timeval redisTimeVal(long, long);
 void getCallback(redisAsyncContext *, void *, void *);
 
 int redisGetReplyType(redisReply *);
-int redisAsyncCommandArgvWrapper(redisAsyncContext *, void *, void *, int, const char **, const size_t *);
+int redisAsyncCommandArgvWrapper(redisAsyncContext *, void *, int, const char **, const size_t *);
 redisReply *redisReplyGetElement(redisReply *, int i);
 
-int redisGoroutineAttach(redisAsyncContext *ac, redisEvent *);
-void redisGoroutineWriteEvent(void *arg);
-void redisGoroutineReadEvent(void *arg);
-void redisForceAsyncFree(redisAsyncContext *ac);
+int redisGoroutineAttach(redisAsyncContext *, redisEvent *);
+void redisGoroutineWriteEvent(void *);
+void redisGoroutineReadEvent(void *);
+void redisForceAsyncFree(redisAsyncContext *);
+void redisAsyncSetCallbacks(redisAsyncContext *);
 
 */
 import "C"
@@ -81,9 +82,15 @@ const (
 
 // Error messages
 var (
+	ErrIO                  = errors.New(`Input/output error.`)
+	ErrEOF                 = errors.New(`Unexpected EOF.`)
+	ErrProtocol            = errors.New(`Protocol error.`)
+	ErrOOM                 = errors.New(`Out of memory.`)
+	ErrOther               = errors.New(`Unknown error.`)
 	ErrFailedAllocation    = errors.New(`Got memory allocation problem.`)
 	ErrNilReply            = errors.New(`Received a nil response.`)
 	ErrNotConnected        = errors.New(`Client is not connected.`)
+	ErrServerIsDown        = errors.New(`Server is down.`)
 	ErrMissingCommand      = errors.New(`Missing command.`)
 	ErrUnexpectedResponse  = errors.New(`Unexpected response from server.`)
 	ErrExpectingPairs      = errors.New(`Expecting (field -> value) pairs.`)
@@ -91,6 +98,8 @@ var (
 	ErrMissingDestination  = errors.New(`Missing destination.`)
 	ErrInvalidDestination  = errors.New(`Destination must be a pointer.`)
 )
+
+var asyncClients map[*C.redisAsyncContext]*Client
 
 // Avoids creating reflect.TypeOf([]interface{}{}) in setReplyValue.
 var interfaceSliceType = reflect.TypeOf([]interface{}{})
@@ -102,10 +111,12 @@ func cStructTimeval(timeout time.Duration) C.struct_timeval {
 
 // A redis client
 type Client struct {
-	ctx   *C.redisContext
-	async *C.redisAsyncContext
-	ev    *C.redisEvent
-	loop  bool
+	ctx          *C.redisContext
+	async        *C.redisAsyncContext
+	ev           *C.redisEvent
+	onConnect    chan int
+	onDisconnect chan int
+	connected    bool
 }
 
 // File descriptor event map.
@@ -117,6 +128,8 @@ func init() {
 		'r': make(map[int]func()),
 		'w': make(map[int]func()),
 	}
+
+	asyncClients = map[*C.redisAsyncContext]*Client{}
 
 	startServer()
 }
@@ -191,13 +204,27 @@ func asyncReceive(a unsafe.Pointer, b unsafe.Pointer) {
 	}
 }
 
+//export redisAsyncConnectCallback
+func redisAsyncConnectCallback(a unsafe.Pointer, b C.int) {
+	ac := (*C.redisAsyncContext)(a)
+	client := asyncClients[ac]
+	client.onConnect <- int(b)
+}
+
+//export redisAsyncDisconnectCallback
+func redisAsyncDisconnectCallback(a unsafe.Pointer, b C.int) {
+	ac := (*C.redisAsyncContext)(a)
+	client := asyncClients[ac]
+	client.onDisconnect <- int(b)
+}
+
 // Associates context with client.
 func (self *Client) setContext(ctx *C.redisContext) error {
 
 	if ctx == nil {
 		return ErrFailedAllocation
 	} else if ctx.err > 0 {
-		err := errors.New(C.GoString(&ctx.errstr[0]))
+		err := self.redisError()
 		C.redisFree(ctx)
 		return err
 	}
@@ -211,6 +238,7 @@ func (self *Client) setContext(ctx *C.redisContext) error {
 
 // Creates an asynchronous connection.
 func (self *Client) asyncConnect(ctx *C.redisContext) error {
+	var status int
 
 	err := self.setContext(ctx)
 
@@ -220,16 +248,71 @@ func (self *Client) asyncConnect(ctx *C.redisContext) error {
 
 	self.async = C.redisAsyncInitialize(self.ctx)
 
+	asyncClients[self.async] = self
+
 	if self.async == nil {
 		C.redisFree(self.ctx)
 		return ErrFailedAllocation
 	}
 
+	self.onConnect = make(chan int)
+	self.onDisconnect = make(chan int)
+
 	C.__redisAsyncCopyError(self.async)
 
 	C.redisGoroutineAttach(self.async, self.ev)
 
+	C.redisAsyncSetCallbacks(self.async)
+
+	// Waiting for the client to connect.
+	status = <-self.onConnect
+
+	if status < 0 {
+		return ErrServerIsDown
+	} else if status == C.REDIS_OK {
+		self.connected = true
+		// Waiting for disconnection.
+		go func() {
+			<-self.onDisconnect
+			self.connected = false
+		}()
+	} else {
+		return self.redisError()
+	}
+
 	return nil
+}
+
+// Returns last redis error status
+func (self *Client) redisError() error {
+	var errno int
+	var errstr string
+	if self.ctx != nil {
+		errno = int(self.ctx.err)
+		errstr = C.GoString(&(self.ctx.errstr[0]))
+	}
+	if self.async != nil {
+		errno = int(self.async.err)
+		errstr = C.GoString(self.async.errstr)
+	}
+	switch errno {
+	case C.REDIS_OK:
+		return nil
+	case C.REDIS_ERR:
+		return ErrUnexpectedResponse
+	case C.REDIS_ERR_IO:
+		return ErrIO
+	case C.REDIS_ERR_EOF:
+		return ErrEOF
+	case C.REDIS_ERR_PROTOCOL:
+		return ErrProtocol
+	case C.REDIS_ERR_OOM:
+		return ErrOOM
+	}
+	if errstr != "" {
+		return errors.New(errstr)
+	}
+	return ErrOther
 }
 
 // Connects the client to the given host and port.
@@ -503,48 +586,42 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 	if self.async == nil {
 
 		// Using panic() because we don't really want the user to try subscribing
-		// on a blocking conection as it may produce some difficult to catch bugs.
+		// on a blocking conection.
 		panic(ErrNonBlockingRequired.Error())
-		//return ErrNonBlockingRequired
+		// return ErrNonBlockingRequired
 
 	} else {
-
-		self.loop = false
 
 		ok := make(chan *C.redisReply)
 
 		var fn = func(r unsafe.Pointer) {
-			if self.loop {
+			if self.connected {
 				ok <- (*C.redisReply)(unsafe.Pointer(r))
 			} else {
 				ok <- nil
 			}
 		}
 
-		var asyncReceiveCallback = asyncReceive
-		var ptr = unsafe.Pointer(&asyncReceiveCallback)
 		var fnptr = unsafe.Pointer(&fn)
 
-		self.loop = true
-
-		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
 
 		for i = 0; i < len(argv); i++ {
 			C.free(unsafe.Pointer(argv[i]))
 		}
 
 		if wait != C.REDIS_OK {
-			return ErrUnexpectedResponse
+			return self.redisError()
 		}
 
-		for self.loop {
+		for self.connected {
 
 			select {
 
 			case res := <-ok:
 
 				if res == nil {
-					return ErrUnexpectedResponse
+					return self.redisError()
 				}
 
 				ptr := (unsafe.Pointer)(res)
@@ -576,6 +653,7 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 
 			}
 		}
+
 	}
 
 	return nil
@@ -626,11 +704,9 @@ func (self *Client) command(dest interface{}, values ...[]byte) error {
 			ok <- (*C.redisReply)(unsafe.Pointer(r))
 		}
 
-		var asyncReceiveCallback = asyncReceive
-		var ptr = unsafe.Pointer(&asyncReceiveCallback)
 		var fnptr = unsafe.Pointer(&fn)
 
-		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(ptr)), (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
+		wait := C.redisAsyncCommandArgvWrapper(self.async, (*(*unsafe.Pointer)(fnptr)), C.int(argc), &argv[0], (*C.size_t)(&argvlen[0]))
 
 		if wait != C.REDIS_OK {
 			return ErrUnexpectedResponse
@@ -2158,8 +2234,6 @@ http://redis.io/commands/punsubscribe
 func (self *Client) PUnsubscribe(pattern ...string) (string, error) {
 	var ret string
 
-	self.loop = false
-
 	args := make([][]byte, len(pattern)+1)
 	args[0] = []byte("PUNSUBSCRIBE")
 
@@ -2178,15 +2252,16 @@ pending replies have been written to the client.
 
 http://redis.io/commands/quit
 */
-func (self *Client) Quit() (string, error) {
-
-	self.loop = false
+func (self *Client) Quit() (s string, err error) {
 
 	if self.ctx != nil {
 
 		if self.async != nil {
+			lastErr := self.redisError()
 			// Forcing async connection to clean without waiting for anything else.
-			C.redisForceAsyncFree(self.async)
+			if lastErr != ErrEOF {
+				C.redisForceAsyncFree(self.async)
+			}
 		} else {
 
 			// Request the server to close the connection.
@@ -2200,11 +2275,11 @@ func (self *Client) Quit() (string, error) {
 
 		self.async = nil
 		self.ctx = nil
-
-		return "", nil
 	}
 
-	return "", ErrNotConnected
+	self.connected = false
+
+	return s, err
 }
 
 /*
@@ -3084,8 +3159,6 @@ given.
 http://redis.io/commands/unsubscribe
 */
 func (self *Client) Unsubscribe(channel ...string) error {
-
-	self.loop = false
 
 	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("UNSUBSCRIBE")
