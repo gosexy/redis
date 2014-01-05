@@ -5,6 +5,9 @@ go:
   - 1.2
   - tip
 
+services:
+  - redis-server
+
 env:
   - GOARCH=amd64
 
