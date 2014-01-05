@@ -2275,6 +2275,8 @@ func (self *Client) Quit() (s string, err error) {
 
 		self.async = nil
 		self.ctx = nil
+	} else {
+		err = ErrNotConnected
 	}
 
 	self.connected = false
