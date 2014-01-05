@@ -2,7 +2,9 @@
 
 Provides Go bindings for the official C [redis][1] client ([hiredis][2]).
 
-## How to install/upgrade
+[![Build Status](https://travis-ci.org/gosexy/redis.png)](https://travis-ci.org/gosexy/redis)
+
+## How to install or upgrade
 
 ```
 go get -u menteslibres.net/gosexy/redis
@@ -10,15 +12,15 @@ go get -u menteslibres.net/gosexy/redis
 
 ## Usage
 
-Install the package with `go get` and use the `import` keyword to use it in your
-program.
+Install the package with `go get` and use the `import` keyword to use it in
+your program.
 
 ```
 import "menteslibres.net/gosexy/redis"
 ```
 
-The `redis.New()` function returns a `*redis.Client` struct that you can use
-to interact with any redis server.
+The `redis.New()` function returns a `*redis.Client` struct that you can use to
+interact with any redis server.
 
 This is a code example on how to connect and send a `PING` command.
 
@@ -213,7 +215,7 @@ It also includes portions of code with the following license:
 The code that wraps them all, `gosexy/redis`, is released under an equally
 friendly license:
 
-> Copyright (c) 2013 José Carlos Nieto, https://menteslibres.net/xiam
+> Copyright (c) 2013-2014 José Carlos Nieto, https://menteslibres.net/xiam
 >
 > Permission is hereby granted, free of charge, to any person obtaining
 > a copy of this software and associated documentation files (the
