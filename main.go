@@ -1061,7 +1061,8 @@ func (self *Client) DebugObject(key string) (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("DEBUG OBJECT"),
+		[]byte("DEBUG"),
+		[]byte("OBJECT"),
 		to.Bytes(key),
 	)
 	return ret, err
@@ -1077,7 +1078,8 @@ func (self *Client) DebugSegfault() (string, error) {
 	var ret string
 	err := self.command(
 		&ret,
-		[]byte("DEBUG SEGFAULT"),
+		[]byte("DEBUG"),
+		[]byte("SEGFAULT"),
 	)
 	return ret, err
 }
@@ -2186,6 +2188,29 @@ func (self *Client) PSubscribe(c chan []string, channel ...string) error {
 	err := self.bcommand(c, &ret, args...)
 
 	return err
+}
+
+/*
+The PUBSUB command is an introspection command that allows to inspect the state
+of the Pub/Sub subsystem. It is composed of subcommands that are documented
+separately.
+
+http://redis.io/commands/pubsub
+*/
+func (self *Client) PubSub(subcommand string, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("PUBSUB")
+	args[1] = []byte(subcommand)
+
+	for i, _ := range arguments {
+		args[2+i] = to.Bytes(arguments[i])
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
 }
 
 /*
@@ -3564,6 +3589,90 @@ func (self *Client) ZUnionStore(destination string, numkeys int64, key string, p
 
 	for i, _ := range params {
 		args[4+i] = to.Bytes(params[i])
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+SCAN iterates the set of keys in the currently selected Redis database.
+
+http://redis.io/commands/scan
+*/
+func (self *Client) Scan(cursor int64, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("SCAN")
+	args[1] = to.Bytes(cursor)
+
+	for i, _ := range arguments {
+		args[2+i] = to.Bytes(arguments[i])
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+SSCAN iterates elements of Sets types.
+
+http://redis.io/commands/scan
+*/
+func (self *Client) SScan(cursor int64, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("SSCAN")
+	args[1] = to.Bytes(cursor)
+
+	for i, _ := range arguments {
+		args[2+i] = to.Bytes(arguments[i])
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+HSCAN iterates fields of Hash types and their associated values.
+
+http://redis.io/commands/scan
+*/
+func (self *Client) HScan(cursor int64, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("HSCAN")
+	args[1] = to.Bytes(cursor)
+
+	for i, _ := range arguments {
+		args[2+i] = to.Bytes(arguments[i])
+	}
+
+	err := self.command(&ret, args...)
+
+	return ret, err
+}
+
+/*
+ZSCAN iterates elements of Sorted Set types and their associated scores.
+
+http://redis.io/commands/zscan
+*/
+func (self *Client) ZScan(cursor int64, arguments ...interface{}) ([]string, error) {
+	var ret []string
+
+	args := make([][]byte, len(arguments)+2)
+	args[0] = []byte("ZSCAN")
+	args[1] = to.Bytes(cursor)
+
+	for i, _ := range arguments {
+		args[2+i] = to.Bytes(arguments[i])
 	}
 
 	err := self.command(&ret, args...)
