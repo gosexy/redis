@@ -80,6 +80,10 @@ const (
 	pollWait = 100
 )
 
+const (
+	DefaultPort = 6379
+)
+
 // Error messages
 var (
 	ErrIO                  = errors.New(`Input/output error.`)
@@ -1433,7 +1437,7 @@ the value is set to 0 before the operation is performed.
 
 http://redis.io/commands/hincrby
 */
-func (self *Client) HIncrBy(key string, field string, increment int64) (int64, error) {
+func (self *Client) HIncrBy(key string, field string, increment interface{}) (int64, error) {
 	var ret int64
 
 	err := self.command(
@@ -1558,7 +1562,7 @@ overwritten.
 
 http://redis.io/commands/hset
 */
-func (self *Client) HSet(key string, field string, value string) (bool, error) {
+func (self *Client) HSet(key string, field string, value interface{}) (bool, error) {
 	var ret bool
 
 	err := self.command(
@@ -1566,7 +1570,7 @@ func (self *Client) HSet(key string, field string, value string) (bool, error) {
 		[]byte("HSET"),
 		[]byte(key),
 		[]byte(field),
-		[]byte(value),
+		to.Bytes(value),
 	)
 
 	return ret, err
