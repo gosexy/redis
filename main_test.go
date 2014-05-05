@@ -1,17 +1,33 @@
 package redis
 
 import (
+	"flag"
 	"fmt"
+	"log"
 	"testing"
 	"time"
 )
 
-const (
-	host = "127.0.0.1"
-	port = uint(6379)
+var client *Client
+
+var (
+	testHost string
+	testPort uint
 )
 
-var client *Client
+func init() {
+	// Getting host and port from command line.
+
+	host := flag.String("host", "127.0.0.1", "Test hostname or address.")
+	port := flag.Uint("port", 6379, "Port.")
+
+	flag.Parse()
+
+	testHost = *host
+	testPort = *port
+
+	log.Printf("Running tests against host %s:%d.\n", testHost, testPort)
+}
 
 func TestPing(t *testing.T) {
 	var s string
@@ -19,7 +35,7 @@ func TestPing(t *testing.T) {
 
 	client = New()
 
-	err = client.ConnectWithTimeout(host, port, time.Second*1)
+	err = client.ConnectWithTimeout(testHost, testPort, time.Second*1)
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -44,7 +60,7 @@ func TestPingAsync(t *testing.T) {
 
 	client = New()
 
-	err = client.ConnectNonBlock(host, port)
+	err = client.ConnectNonBlock(testHost, testPort)
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -70,7 +86,7 @@ func TestSimpleSet(t *testing.T) {
 	var err error
 
 	// We'll be reusing this client.
-	err = client.Connect(host, port)
+	err = client.Connect(testHost, testPort)
 
 	if err != nil {
 		t.Fatalf(err.Error())
@@ -1035,7 +1051,7 @@ func TestPublish(t *testing.T) {
 
 	publisher := New()
 
-	err = publisher.Connect(host, port)
+	err = publisher.Connect(testHost, testPort)
 
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
@@ -1059,7 +1075,7 @@ func TestSubscriptions(t *testing.T) {
 
 	consumer := New()
 
-	err = consumer.ConnectNonBlock(host, port)
+	err = consumer.ConnectNonBlock(testHost, testPort)
 
 	consumer.Set("test", "TestSubscriptions")
 
@@ -1090,7 +1106,7 @@ func TestPSubscriptions(t *testing.T) {
 
 	consumer := New()
 
-	err = consumer.ConnectNonBlock(host, port)
+	err = consumer.ConnectNonBlock(testHost, testPort)
 
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
@@ -1951,8 +1967,8 @@ func TestQuit(t *testing.T) {
 func BenchmarkConnect(b *testing.B) {
 	client = New()
 
-	err := client.ConnectWithTimeout(host, port, time.Second*1)
-	//err := client.ConnectNonBlock(host, port)
+	err := client.ConnectWithTimeout(testHost, testPort, time.Second*1)
+	//err := client.ConnectNonBlock(testHost, testPort)
 
 	if err != nil {
 		b.Fatalf(err.Error())
