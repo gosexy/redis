@@ -525,7 +525,11 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 				item := C.redisReplyGetElement(reply, C.int(i))
 				err = setReplyValue(elements.Index(i), unsafe.Pointer(item))
 				if err != nil {
-					return err
+					if err != ErrNilReply {
+						// Allows catching situations like
+						// https://github.com/gosexy/redis/issues/23
+						return err
+					}
 				}
 				// Parent's freeReplyObject already takes care.
 				// C.freeReplyObject(unsafe.Pointer(item))
@@ -543,8 +547,8 @@ func setReplyValue(v reflect.Value, raw unsafe.Pointer) error {
 			response type.
 		*/
 		v.Set(reflect.Zero(v.Type()))
-		//return ErrNilReply
-		return nil
+		return ErrNilReply
+		//return nil
 	default:
 		return fmt.Errorf("Unknown redis reply type: %v", C.redisGetReplyType(reply))
 	}

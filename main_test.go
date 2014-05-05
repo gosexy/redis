@@ -34,11 +34,13 @@ func TestConnect(t *testing.T) {
 
 	client = New()
 
+	// Attempting a valid connection.
 	err = client.Connect(testHost, testPort)
 	if err != nil {
 		t.Fatalf("Failed to connect to test server: %v", err)
 	}
 
+	// Attempting to connect to port 0, probably closed...
 	err = client.Connect(testHost, 0)
 	if err == nil {
 		t.Fatalf("Expecting a connection error.")
@@ -143,6 +145,37 @@ func TestGet(t *testing.T) {
 	if s != "hello" {
 		t.Errorf("Could not SET/GET value.")
 	}
+
+	// Deleting key.
+	client.Del("foo")
+
+	// Attempting to retrieve deleted key.
+	s, err = client.Get("foo")
+
+	if s != "" {
+		t.Fatalf("Expecting an empty string.")
+	}
+	if err == nil {
+		t.Fatalf("Expecting a redis.ErrNilReply error.")
+	}
+
+	// Making sure https://github.com/gosexy/redis/issues/23 does not interfere
+	// with https://github.com/gosexy/redis/issues/12.
+	client.Del("test")
+
+	client.HMSet("test", "123", "*", "456", "*", "789", "*")
+
+	var vals []string
+	vals, err = client.HMGet("test", "1232", "456")
+
+	if err != nil {
+		t.Fatalf("Expecting no error.")
+	}
+
+	if vals[0] != "" || vals[1] != "*" {
+		t.Fatalf("Unexpected values.")
+	}
+
 }
 
 func TestSetGetUnicode(t *testing.T) {
