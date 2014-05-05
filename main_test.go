@@ -155,7 +155,7 @@ func TestGet(t *testing.T) {
 	if s != "" {
 		t.Fatalf("Expecting an empty string.")
 	}
-	if err == nil {
+	if err != ErrNilReply {
 		t.Fatalf("Expecting a redis.ErrNilReply error.")
 	}
 
