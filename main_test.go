@@ -29,6 +29,22 @@ func init() {
 	log.Printf("Running tests against host %s:%d.\n", testHost, testPort)
 }
 
+func TestConnect(t *testing.T) {
+	var err error
+
+	client = New()
+
+	err = client.Connect(testHost, testPort)
+	if err != nil {
+		t.Fatalf("Failed to connect to test server: %v", err)
+	}
+
+	err = client.Connect(testHost, 0)
+	if err == nil {
+		t.Fatalf("Expecting a connection error.")
+	}
+}
+
 func TestPing(t *testing.T) {
 	var s string
 	var err error

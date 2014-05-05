@@ -225,17 +225,17 @@ func redisAsyncDisconnectCallback(a unsafe.Pointer, b C.int) {
 // Associates context with client.
 func (self *Client) setContext(ctx *C.redisContext) error {
 
+	self.ctx = ctx
+	self.async = nil
+
 	if ctx == nil {
 		return ErrFailedAllocation
 	} else if ctx.err > 0 {
 		err := self.redisError()
 		C.redisFree(ctx)
+		self.ctx = nil
 		return err
 	}
-
-	self.ctx = ctx
-
-	self.async = nil
 
 	return nil
 }
