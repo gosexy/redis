@@ -13,4 +13,4 @@ env:
 
 script:
   - go build
-  - go test
+  - go test -host 127.0.0.1
