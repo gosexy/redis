@@ -1679,9 +1679,8 @@ that is simple to parse by computers and easy to read by humans.
 
 http://redis.io/commands/info
 */
-func (self *Client) Info(section string) ([]string, error) {
-	var ret []string
-	err := self.command(
+func (self *Client) Info(section string) (ret string, err error) {
+	err = self.command(
 		&ret,
 		[]byte("INFO"),
 		[]byte(section),

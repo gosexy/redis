@@ -1991,6 +1991,19 @@ func TestRawList(t *testing.T) {
 
 }
 
+// https://github.com/gosexy/redis/issues/27
+func TestInfo(t *testing.T) {
+	info, err := client.Info("all")
+
+	if err != nil {
+		t.Fatalf("Command failed: %q", err)
+	}
+
+	if len(info) == 0 {
+		t.Fatalf("Failed to actually get data from INFO.")
+	}
+}
+
 func TestQuit(t *testing.T) {
 	var err error
 
