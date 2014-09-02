@@ -3,6 +3,9 @@ package redis
 import (
 	"bytes"
 	"errors"
+	"log"
+	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -241,4 +244,61 @@ func TestNoCGODelSetGetCommand(t *testing.T) {
 		t.Fatal()
 	}
 
+}
+
+func TestNoCGOAsyncCommand(t *testing.T) {
+	var err error
+	var wg sync.WaitGroup
+	var c *conn
+
+	if c, err = dial(testProto, testAddress); err != nil {
+		t.Fatal(err)
+	}
+
+	defer c.close()
+
+	l := 1000
+
+	results := make(map[int]bool, l)
+
+	for i := 0; i < l; i++ {
+		wg.Add(1)
+
+		results[i] = false
+
+		go func(i int) {
+			var a string
+			var e string
+			var errProm chan error
+			var err error
+
+			e = strconv.Itoa(i)
+			if errProm, err = c.asyncCommand(&a, []byte("ECHO"), []byte(e)); err != nil {
+				log.Fatalf("async: %q\n", err)
+			}
+
+			err = <-errProm
+			if err != nil {
+				log.Fatalf("async(2): %q\n", err)
+			}
+
+			if a != e {
+				log.Fatalf("%d: got %s, expecting %s.", i, a, e)
+			}
+
+			results[i] = true
+
+			wg.Done()
+		}(i)
+	}
+
+	wg.Wait()
+
+	for i := 0; i < l; i++ {
+		if results[i] == false {
+			log.Fatalf("Missing result for index %d.", i)
+		}
+	}
+
+	log.Println("OK!")
 }
