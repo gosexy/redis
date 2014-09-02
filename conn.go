@@ -5,7 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/xiam/resp"
-	//"log"
+	"log"
 	"net"
 	"strconv"
 	"sync"
@@ -238,7 +238,7 @@ func (self *conn) readNextMessage() ([]byte, error) {
 		return nil, err
 	}
 
-	//log.Printf("peek: %#v\n", string(head))
+	log.Printf("peek: %#v\n", string(head))
 
 	switch head[0] {
 	case respStringByte:
@@ -263,6 +263,10 @@ func (self *conn) readNextMessage() ([]byte, error) {
 			return nil, err
 		}
 
+		if size < 0 {
+			return nil, err
+		}
+
 		var data []byte
 		for i := 0; i < size; i++ {
 			if data, err = self.readNextMessage(); err != nil {
@@ -271,7 +275,7 @@ func (self *conn) readNextMessage() ([]byte, error) {
 			buf = append(buf, data...)
 		}
 
-		//log.Printf("S(1): %#v\n", string(data))
+		log.Printf("S(1): %#v\n", string(data))
 
 		return buf, nil
 	case respBulkByte:
@@ -286,6 +290,12 @@ func (self *conn) readNextMessage() ([]byte, error) {
 		}
 
 		if size, err = strconv.Atoi(string(buf[1 : len(buf)-2])); err != nil {
+			return nil, err
+		}
+
+		// Nil
+		if size < 1 {
+			self.readNextLine()
 			return nil, err
 		}
 
@@ -309,7 +319,7 @@ func (self *conn) readNextMessage() ([]byte, error) {
 			//log.Printf("S(2): %#v\n", string(data))
 		}
 
-		//log.Printf("S: %#v\n", string(data))
+		log.Printf("S: %#v\n", string(data))
 
 		return data, nil
 	}
@@ -331,7 +341,7 @@ func (self *conn) writeCommand(command ...interface{}) error {
 func (self *conn) write(data []byte) error {
 	var err error
 
-	//log.Printf("C: %#v\n", string(data))
+	log.Printf("C: %#v\n", string(data))
 
 	if _, err = self.conn.Write(data); err != nil {
 		return err
@@ -413,8 +423,8 @@ func (self *conn) command(dest interface{}, command ...interface{}) error {
 
 	buf = <-nextLine
 
-	if dest == nil {
-		return nil
+	if dest == nil || len(buf) == 0 {
+		return ErrNilReply
 	}
 
 	return resp.Unmarshal(buf, dest)

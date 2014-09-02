@@ -18,7 +18,7 @@ var (
 func init() {
 	// Getting host and port from command line.
 
-	host := flag.String("host", "127.0.0.1", "Test hostname or address.")
+	host := flag.String("host", "10.1.2.201", "Test hostname or address.")
 	port := flag.Uint("port", 6379, "Port.")
 
 	flag.Parse()
@@ -27,22 +27,20 @@ func init() {
 	testPort = *port
 
 	log.Printf("Running tests against host %s:%d.\n", testHost, testPort)
+
+	client = New()
 }
 
 func TestConnect(t *testing.T) {
 	var err error
 
-	client = New()
-
 	// Attempting a valid connection.
-	err = client.Connect(testHost, testPort)
-	if err != nil {
-		t.Fatalf("Failed to connect to test server: %v", err)
+	if err = client.Connect(testHost, testPort); err != nil {
+		t.Fatalf("Failed to connect to test server: %q", err)
 	}
 
 	// Attempting to connect to port 0, probably closed...
-	err = client.Connect(testHost, 0)
-	if err == nil {
+	if err = client.Connect(testHost, 0); err == nil {
 		t.Fatalf("Expecting a connection error.")
 	}
 }
@@ -53,49 +51,21 @@ func TestPing(t *testing.T) {
 
 	client = New()
 
-	err = client.ConnectWithTimeout(testHost, testPort, time.Second*1)
-
-	if err != nil {
+	if err = client.ConnectWithTimeout(testHost, testPort, time.Second*1); err != nil {
 		t.Fatalf(err.Error())
 	}
 
-	s, err = client.Ping()
+	defer client.Close()
 
-	if err != nil {
-		t.Fatalf("Command failed: %v", err)
+	if s, err = client.Ping(); err != nil {
+		t.Fatalf("Command failed: %q", err)
 	}
 
 	if s != "PONG" {
-		t.Fatalf("Failed")
+		t.Fatal()
 	}
 
 	client.Quit()
-}
-
-func TestPingAsync(t *testing.T) {
-	var s string
-	var err error
-
-	client = New()
-
-	err = client.ConnectNonBlock(testHost, testPort)
-
-	if err != nil {
-		t.Fatalf(err.Error())
-	}
-
-	s, err = client.Ping()
-
-	if err != nil {
-		t.Fatalf("Command failed: %v", err)
-	}
-
-	if s != "PONG" {
-		t.Fatalf("Failed")
-	}
-
-	client.Quit()
-
 }
 
 func TestSimpleSet(t *testing.T) {
@@ -103,31 +73,28 @@ func TestSimpleSet(t *testing.T) {
 	var b bool
 	var err error
 
-	// We'll be reusing this client.
-	err = client.Connect(testHost, testPort)
+	client = New()
 
-	if err != nil {
-		t.Fatalf(err.Error())
+	if err = client.Connect(testHost, testPort); err != nil {
+		t.Fatal(err)
 	}
 
-	s, err = client.Set("foo", "hello world.")
+	defer client.Close()
 
-	if err != nil {
-		t.Fatalf("Command failed: %s", err.Error())
+	if s, err = client.Set("foo", "hello world."); err != nil {
+		t.Fatalf("Command failed: %q", err)
 	}
 
 	if s != "OK" {
-		t.Fatalf("Failed")
+		t.Fatal()
 	}
 
-	b, err = client.SetNX("foo", "exists!")
-
-	if err != nil {
-		t.Fatalf("Command failed: %s", err.Error())
+	if b, err = client.SetNX("foo", "exists!"); err != nil {
+		t.Fatalf("Command failed: %q", err)
 	}
 
 	if b == true {
-		t.Fatalf("Failed")
+		t.Fatal()
 	}
 }
 
@@ -135,11 +102,18 @@ func TestGet(t *testing.T) {
 	var s string
 	var err error
 
+	client = New()
+
+	if err = client.Connect(testHost, testPort); err != nil {
+		t.Fatal(err)
+	}
+
+	defer client.Close()
+
 	client.Set("foo", "hello")
 
-	s, err = client.Get("foo")
-	if err != nil {
-		t.Fatalf("Command failed: %s", err.Error())
+	if s, err = client.Get("foo"); err != nil {
+		t.Fatalf("Command failed: %q", err)
 	}
 
 	if s != "hello" {
@@ -169,7 +143,7 @@ func TestGet(t *testing.T) {
 	vals, err = client.HMGet("test", "1232", "456")
 
 	if err != nil {
-		t.Fatalf("Expecting no error.")
+		t.Fatalf("Expecting no error: %q", err)
 	}
 
 	if vals[0] != "" || vals[1] != "*" {
@@ -1124,7 +1098,7 @@ func TestSubscriptions(t *testing.T) {
 
 	consumer := New()
 
-	err = consumer.ConnectNonBlock(testHost, testPort)
+	err = consumer.Connect(testHost, testPort)
 
 	consumer.Set("test", "TestSubscriptions")
 
@@ -1155,7 +1129,7 @@ func TestPSubscriptions(t *testing.T) {
 
 	consumer := New()
 
-	err = consumer.ConnectNonBlock(testHost, testPort)
+	err = consumer.Connect(testHost, testPort)
 
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)
@@ -2030,7 +2004,7 @@ func BenchmarkConnect(b *testing.B) {
 	client = New()
 
 	err := client.ConnectWithTimeout(testHost, testPort, time.Second*1)
-	//err := client.ConnectNonBlock(testHost, testPort)
+	//err := client.Connect(testHost, testPort)
 
 	if err != nil {
 		b.Fatalf(err.Error())
@@ -2039,11 +2013,10 @@ func BenchmarkConnect(b *testing.B) {
 
 func BenchmarkPing(b *testing.B) {
 	var err error
-	client.Del("hello")
 	for i := 0; i < b.N; i++ {
 		_, err = client.Ping()
 		if err != nil {
-			b.Fatalf(err.Error())
+			b.Fatal(err)
 			break
 		}
 	}
@@ -2051,6 +2024,7 @@ func BenchmarkPing(b *testing.B) {
 
 func BenchmarkSet(b *testing.B) {
 	var err error
+	client.Del("hello")
 	for i := 0; i < b.N; i++ {
 		_, err = client.Set("hello", 1)
 		if err != nil {
