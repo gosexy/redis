@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"github.com/xiam/resp"
+	"io"
 	"log"
 	"net"
 	"strconv"
@@ -18,8 +19,10 @@ var (
 	ErrNotEnoughData   = errors.New(`Not enough data.`)
 )
 
-const readBufferSize = 1024 * 10
-const channelBufferSize = 128
+const (
+	readBufferSize    = 4000
+	channelBufferSize = 128
+)
 
 var defaultTimeout = time.Second * 20
 
@@ -41,6 +44,9 @@ type conn struct {
 	shouldRead    chan bool
 	writer        *bytes.Buffer
 	readerBuf     *bytes.Buffer
+	quitReading   chan bool
+	quitWriting   chan bool
+	quit          chan bool
 	reader        *bufio.Reader
 	timeout       time.Duration
 	commandMutex  *sync.Mutex
@@ -67,6 +73,9 @@ func dial(network string, address string) (*conn, error) {
 		commandMutex:  new(sync.Mutex),
 		writerMutex:   new(sync.Mutex),
 		readLineMutex: new(sync.Mutex),
+		quitReading:   make(chan bool),
+		quitWriting:   make(chan bool),
+		quit:          make(chan bool),
 		shouldWrite:   make(chan bool, channelBufferSize),
 		shouldRead:    make(chan bool, channelBufferSize),
 		writeBuf:      make(chan []byte, channelBufferSize),
@@ -76,6 +85,8 @@ func dial(network string, address string) (*conn, error) {
 
 	c.reader = bufio.NewReader(c.readerBuf)
 
+	go c.asyncStatus()
+
 	go c.asyncConnReader()
 
 	go c.asyncConnWriter()
@@ -83,6 +94,30 @@ func dial(network string, address string) (*conn, error) {
 	go c.asyncReadWriter()
 
 	return c, nil
+}
+
+func (self *conn) asyncStatus() {
+	for {
+		select {
+		case <-self.quit:
+			if self.conn != nil {
+				log.Println("request to quit.")
+				self.quitWriting <- true
+				log.Println("CLOSED 1")
+				self.quitReading <- true
+				log.Println("CLOSED 2")
+				close(self.quit)
+				close(self.quitWriting)
+				close(self.quitReading)
+				close(self.shouldRead)
+				close(self.shouldWrite)
+				close(self.writeBuf)
+				close(self.readBuf)
+				log.Println("CLOSED 3")
+			}
+			return
+		}
+	}
 }
 
 func (self *conn) writeNextLine(data []byte) error {
@@ -104,7 +139,10 @@ func (self *conn) asyncConnReader() {
 	for {
 		data = make([]byte, readBufferSize)
 		if n, err = self.conn.Read(data); err != nil {
-			//log.Printf("read error(1): %q\n", err)
+			if err == io.EOF {
+				self.close()
+			}
+			log.Printf("read error(1): %q\n", err)
 			return
 		}
 		if n > 0 {
@@ -123,15 +161,16 @@ func (self *conn) asyncReadWriter() {
 
 	for {
 		select {
+		case <-self.quitReading:
+			return
 		case <-self.shouldRead:
 			//self.readerMutex.Lock()
 			for {
 				if self.readerBuf.Len()+self.reader.Buffered() > 0 {
 					if next, err = self.readNextMessage(); err != nil {
-						//log.Printf("next message error(2): %q\n", err)
+						log.Printf("next message error(2): %q\n", err)
 						break
 					}
-					//log.Printf("queue: %d\n", len(self.lineBuf))
 					if len(self.lineBuf) > 0 {
 						self.lineBuf[0] <- next
 						self.lineBuf = self.lineBuf[1:]
@@ -170,6 +209,8 @@ func (self *conn) asyncConnWriter() {
 
 	for {
 		select {
+		case <-self.quitWriting:
+			return
 		case message = <-self.writeBuf:
 			self.writerMutex.Lock()
 			self.writer.Write(message)
@@ -209,11 +250,11 @@ func (self *conn) readNextLine() (data []byte, err error) {
 	defer self.readLineMutex.Unlock()
 
 	if data, err = self.reader.ReadBytes(endOfLine[1]); err != nil {
-		//log.Printf("last line err: %q\n", err)
+		log.Printf("last line err: %q\n", err)
 		return nil, err
 	}
 
-	//log.Printf("L: %#v\n", string(data))
+	log.Printf("L: %#v\n", string(data))
 	//log.Printf("slice ok")
 
 	return data, err
@@ -264,18 +305,20 @@ func (self *conn) readNextMessage() ([]byte, error) {
 		}
 
 		if size < 0 {
-			return nil, err
+			return self.readNextLine()
 		}
 
 		var data []byte
 		for i := 0; i < size; i++ {
 			if data, err = self.readNextMessage(); err != nil {
+				log.Printf("exitr\n")
 				return nil, err
 			}
+			log.Printf("OK ARRAY\n")
 			buf = append(buf, data...)
 		}
 
-		log.Printf("S(1): %#v\n", string(data))
+		log.Printf("S(1): %#v\n", string(buf))
 
 		return buf, nil
 	case respBulkByte:
@@ -283,7 +326,7 @@ func (self *conn) readNextMessage() ([]byte, error) {
 		var data []byte
 		var size int
 
-		//log.Println("BULK")
+		log.Println("BULK")
 
 		if buf, err = self.peekNextLine(); err != nil {
 			return nil, err
@@ -293,30 +336,40 @@ func (self *conn) readNextMessage() ([]byte, error) {
 			return nil, err
 		}
 
+		log.Printf("size: %d\n", size)
+
 		// Nil
 		if size < 1 {
-			self.readNextLine()
-			return nil, err
+			return self.readNextLine()
 		}
 
 		size = len(buf) + size + 2
 
-		if self.reader.Buffered() < size {
-			//log.Println("BULK: not enough data.")
+		if self.reader.Buffered()+self.readerBuf.Len() < size {
+			log.Println("BULK: not enough data.")
+			log.Printf("got: %d, expecting: %d\n", self.reader.Buffered(), size)
+			log.Printf("buf: %d\n", self.readerBuf.Len())
 			//log.Printf("buf: %#v\n", string(buf))
 			return buf, ErrNotEnoughData
 		}
 
 		if size > 0 {
-			data = make([]byte, size)
+			var n int
+			data = make([]byte, 0, size)
 
-			if _, err = self.reader.Read(data); err != nil {
-				return nil, err
+			for size > 0 {
+				chunk := make([]byte, size)
+				if n, err = self.reader.Read(chunk); err != nil {
+					return nil, err
+				}
+				data = append(data, chunk[:n]...)
+				size = size - n
+				log.Printf("remaining: %d, n: %d\n", size, n)
 			}
 
 			//data = append(buf, data...)
 
-			//log.Printf("S(2): %#v\n", string(data))
+			log.Printf("S(2): %#v\n", string(data))
 		}
 
 		log.Printf("S: %#v\n", string(data))
@@ -351,7 +404,12 @@ func (self *conn) write(data []byte) error {
 }
 
 func (self *conn) close() error {
-	return self.conn.Close()
+	if self.conn != nil {
+		self.conn.Close()
+		self.quit <- true
+		self.conn = nil
+	}
+	return nil
 }
 
 func (self *conn) asyncCommand(dest interface{}, command ...interface{}) (chan error, error) {
@@ -406,6 +464,10 @@ func (self *conn) command(dest interface{}, command ...interface{}) error {
 	var buf []byte
 	var err error
 
+	if self.conn == nil {
+		return ErrNotConnected
+	}
+
 	if data, err = resp.Marshal(command); err != nil {
 		return err
 	}
@@ -414,7 +476,7 @@ func (self *conn) command(dest interface{}, command ...interface{}) error {
 
 	self.commandMutex.Lock()
 
-	//log.Printf("Q: %#v\n", string(data))
+	log.Printf("Q: %#v\n", string(data))
 
 	self.writeNextLine(data)
 	nextLine = self.reserveNextLine()
@@ -427,5 +489,11 @@ func (self *conn) command(dest interface{}, command ...interface{}) error {
 		return ErrNilReply
 	}
 
-	return resp.Unmarshal(buf, dest)
+	err = resp.Unmarshal(buf, dest)
+
+	if err == resp.ErrMessageIsNil {
+		return ErrNilReply
+	}
+
+	return err
 }

@@ -1559,8 +1559,12 @@ pending replies have been written to the client.
 http://redis.io/commands/quit
 */
 func (self *Client) Quit() (s string, err error) {
+	err = self.command(
+		&s,
+		[]byte("QUIT"),
+	)
 	self.redis.close()
-	return "", nil
+	return s, err
 }
 
 /*
@@ -2028,7 +2032,7 @@ for "SET if N ot e X ists".
 http://redis.io/commands/setnx
 */
 func (self *Client) SetNX(key string, value interface{}) (bool, error) {
-	var ret int
+	var ret bool
 
 	err := self.command(
 		&ret,
@@ -2037,11 +2041,7 @@ func (self *Client) SetNX(key string, value interface{}) (bool, error) {
 		to.Bytes(value),
 	)
 
-	if ret == 0 {
-		return false, err
-	}
-
-	return true, err
+	return ret, err
 }
 
 /*

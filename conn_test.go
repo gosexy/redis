@@ -3,6 +3,7 @@ package redis
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log"
 	"strconv"
 	"sync"
@@ -26,7 +27,11 @@ func TestNoCGOConn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer c.close()
+	fmt.Printf("ok1\n")
+
+	if err = c.close(); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func TestNoCGOPing(t *testing.T) {
@@ -34,11 +39,11 @@ func TestNoCGOPing(t *testing.T) {
 	var err error
 	var data []byte
 
+	fmt.Printf("ok1\n")
+
 	if c, err = dial(testProto, testAddress); err != nil {
 		t.Fatal(err)
 	}
-
-	defer c.close()
 
 	if err = c.writeCommand([]byte("PING")); err != nil {
 		t.Fatal(err)
@@ -51,6 +56,14 @@ func TestNoCGOPing(t *testing.T) {
 	if bytes.Equal(data, []byte("+PONG\r\n")) == false {
 		t.Fatal()
 	}
+
+	fmt.Printf("ok2\n")
+
+	if err = c.close(); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("ok3\n")
 }
 
 func TestNoCGODelete(t *testing.T) {
@@ -61,13 +74,17 @@ func TestNoCGODelete(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	defer c.close()
-
 	if err = c.writeCommand([]byte("DEL"), []byte("testKey")); err != nil {
 		t.Fatal(err)
 	}
 
 	if _, err = c.read(); err != nil {
+		t.Fatal(err)
+	}
+
+	fmt.Printf("ok3\n")
+
+	if err = c.close(); err != nil {
 		t.Fatal(err)
 	}
 }
@@ -225,7 +242,9 @@ func TestNoCGODelSetGetCommand(t *testing.T) {
 	defer c.close()
 
 	if err = c.command(nil, []byte("DEL"), []byte("testKey")); err != nil {
-		t.Fatal(err)
+		if err != ErrNilReply {
+			t.Fatal(err)
+		}
 	}
 
 	if err = c.command(&s, []byte("SET"), []byte("testKey"), []byte("Foo Bar!")); err != nil {

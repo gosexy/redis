@@ -49,6 +49,7 @@ var (
 	ErrNonBlockingRequired = errors.New(`This command requires a non-blocking connection.`)
 	ErrMissingDestination  = errors.New(`Missing destination.`)
 	ErrInvalidDestination  = errors.New(`Destination must be a pointer.`)
+	ErrNotInitialized      = errors.New(`Client is not initialized. Forgot to use redis.New()?`)
 )
 
 // A redis client
@@ -62,8 +63,12 @@ func New() *Client {
 }
 
 func (self *Client) Close() error {
+	if self == nil {
+		return ErrNotConnected
+	}
 	if self.redis != nil {
 		self.redis.close()
+		self.redis = nil
 	}
 	return nil
 }
@@ -71,8 +76,12 @@ func (self *Client) Close() error {
 // Connects the client to the given host and port.
 func (self *Client) Connect(host string, port uint) (err error) {
 
+	if self == nil {
+		return ErrNotInitialized
+	}
+
 	if self.redis != nil {
-		self.redis.close()
+		self.Close()
 	}
 
 	if self.redis, err = dial(`tcp`, fmt.Sprintf(`%s:%d`, host, port)); err != nil {
@@ -106,6 +115,16 @@ func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) e
 
 // Sends a raw command and stores the response into a destination variable.
 func (self *Client) Command(dest interface{}, values ...interface{}) error {
+	if self == nil {
+		return ErrNotInitialized
+	}
+	for i := range values {
+		switch values[i].(type) {
+		case []byte:
+		default:
+			values[i] = []byte(fmt.Sprintf("%v", values[i]))
+		}
+	}
 	return self.redis.command(dest, values...)
 }
 
@@ -114,6 +133,9 @@ func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte
 }
 
 func (self *Client) command(dest interface{}, values ...[]byte) error {
+	if self == nil {
+		return ErrNotInitialized
+	}
 	ivalues := make([]interface{}, len(values))
 	for i := 0; i < len(values); i++ {
 		ivalues[i] = values[i]
