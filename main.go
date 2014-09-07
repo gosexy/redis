@@ -128,8 +128,15 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 	return self.redis.command(dest, values...)
 }
 
-func (self *Client) bcommand(c chan []string, dest interface{}, values ...[]byte) error {
-	return nil
+func (self *Client) bcommand(c chan []string, values ...[]byte) error {
+	if self == nil {
+		return ErrNotInitialized
+	}
+	ivalues := make([]interface{}, len(values))
+	for i := 0; i < len(values); i++ {
+		ivalues[i] = values[i]
+	}
+	return self.redis.bcommand(c, ivalues...)
 }
 
 func (self *Client) command(dest interface{}, values ...[]byte) error {

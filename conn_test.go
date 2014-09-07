@@ -3,7 +3,6 @@ package redis
 import (
 	"bytes"
 	"errors"
-	"fmt"
 	"log"
 	"strconv"
 	"sync"
@@ -14,11 +13,6 @@ var (
 	errTestFailed = errors.New(`Test failed.`)
 )
 
-const (
-	testProto   = "tcp"
-	testAddress = "10.1.2.201:6379"
-)
-
 func TestNoCGOConn(t *testing.T) {
 	var c *conn
 	var err error
@@ -26,8 +20,6 @@ func TestNoCGOConn(t *testing.T) {
 	if c, err = dial(testProto, testAddress); err != nil {
 		t.Fatal(err)
 	}
-
-	fmt.Printf("ok1\n")
 
 	if err = c.close(); err != nil {
 		t.Fatal(err)
@@ -38,8 +30,6 @@ func TestNoCGOPing(t *testing.T) {
 	var c *conn
 	var err error
 	var data []byte
-
-	fmt.Printf("ok1\n")
 
 	if c, err = dial(testProto, testAddress); err != nil {
 		t.Fatal(err)
@@ -57,13 +47,10 @@ func TestNoCGOPing(t *testing.T) {
 		t.Fatal()
 	}
 
-	fmt.Printf("ok2\n")
-
 	if err = c.close(); err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Printf("ok3\n")
 }
 
 func TestNoCGODelete(t *testing.T) {
@@ -81,8 +68,6 @@ func TestNoCGODelete(t *testing.T) {
 	if _, err = c.read(); err != nil {
 		t.Fatal(err)
 	}
-
-	fmt.Printf("ok3\n")
 
 	if err = c.close(); err != nil {
 		t.Fatal(err)
@@ -319,5 +304,4 @@ func TestNoCGOAsyncCommand(t *testing.T) {
 		}
 	}
 
-	log.Println("OK!")
 }

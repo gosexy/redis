@@ -11,8 +11,13 @@ import (
 )
 
 var (
-	testHost string
-	testPort uint
+	testHost    string
+	testAddress string
+	testPort    uint
+)
+
+const (
+	testProto = `tcp`
 )
 
 func init() {
@@ -24,6 +29,8 @@ func init() {
 
 	testHost = *host
 	testPort = *port
+
+	testAddress = fmt.Sprintf("%s:%d", testHost, testPort)
 
 	log.Printf("Running tests against host %s:%d.\n", testHost, testPort)
 }

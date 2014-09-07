@@ -1457,8 +1457,6 @@ Subscribes the client to the given patterns.
 http://redis.io/commands/psubscribe
 */
 func (self *Client) PSubscribe(c chan []string, channel ...string) error {
-	var ret []string
-
 	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("PSUBSCRIBE")
 
@@ -1466,7 +1464,7 @@ func (self *Client) PSubscribe(c chan []string, channel ...string) error {
 		args[1+i] = to.Bytes(channel[i])
 	}
 
-	err := self.bcommand(c, &ret, args...)
+	err := self.bcommand(c, args...)
 
 	return err
 }
@@ -1537,9 +1535,7 @@ given.
 
 http://redis.io/commands/punsubscribe
 */
-func (self *Client) PUnsubscribe(pattern ...string) (string, error) {
-	var ret string
-
+func (self *Client) PUnsubscribe(pattern ...string) error {
 	args := make([][]byte, len(pattern)+1)
 	args[0] = []byte("PUNSUBSCRIBE")
 
@@ -1547,9 +1543,9 @@ func (self *Client) PUnsubscribe(pattern ...string) (string, error) {
 		args[1+i] = to.Bytes(pattern[i])
 	}
 
-	err := self.command(&ret, args...)
+	err := self.bcommand(nil, args...)
 
-	return ret, err
+	return err
 }
 
 /*
@@ -2311,8 +2307,6 @@ Subscribes the client to the specified channels.
 http://redis.io/commands/subscribe
 */
 func (self *Client) Subscribe(c chan []string, channel ...string) error {
-	var ret []string
-
 	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("SUBSCRIBE")
 
@@ -2320,7 +2314,7 @@ func (self *Client) Subscribe(c chan []string, channel ...string) error {
 		args[1+i] = to.Bytes(channel[i])
 	}
 
-	err := self.bcommand(c, &ret, args...)
+	err := self.bcommand(c, args...)
 
 	return err
 }
@@ -2444,7 +2438,6 @@ given.
 http://redis.io/commands/unsubscribe
 */
 func (self *Client) Unsubscribe(channel ...string) error {
-
 	args := make([][]byte, len(channel)+1)
 	args[0] = []byte("UNSUBSCRIBE")
 
@@ -2452,7 +2445,7 @@ func (self *Client) Unsubscribe(channel ...string) error {
 		args[1+i] = to.Bytes(channel[i])
 	}
 
-	err := self.command(nil, args...)
+	err := self.bcommand(nil, args...)
 
 	return err
 }
