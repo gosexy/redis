@@ -4,11 +4,11 @@ import (
 	"flag"
 	"fmt"
 	"log"
+	"strconv"
+	"sync"
 	"testing"
 	"time"
 )
-
-var globalClient *Client
 
 var (
 	testHost string
@@ -114,7 +114,7 @@ func TestGet(t *testing.T) {
 	client = New()
 
 	if err = client.Connect(testHost, testPort); err != nil {
-		t.Fatal(err)
+		t.Fatal("Client failed to connect: ", err)
 	}
 
 	defer client.Close()
@@ -1167,41 +1167,112 @@ func TestZSet(t *testing.T) {
 
 }
 
-func TestPublish(t *testing.T) {
+func TestPublishAndSubscribe(t *testing.T) {
 	var err error
+	var received map[int]bool
+	var tests int
 
+	wg := new(sync.WaitGroup)
+
+	mu := new(sync.Mutex)
+
+	tests = 10
+
+	// Subscriber
+	consumer := New()
+
+	if err = consumer.Connect(testHost, testPort); err != nil {
+		t.Fatal("Failed to connect: ", err)
+	}
+
+	rec := make(chan []string, tests)
+
+	subscribed := make(chan bool)
+
+	go func() {
+		received = make(map[int]bool)
+		for {
+			// Receiving messages.
+			select {
+			case ls := <-rec:
+				if ls[0] == `message` {
+					i, _ := strconv.Atoi(ls[2])
+					received[i] = true
+					// Marking job as done.
+					wg.Done()
+				} else if ls[0] == `subscribe` {
+					subscribed <- true
+				} else if ls[0] == `unsubscribe` {
+					return
+				}
+			}
+		}
+	}()
+
+	if err = consumer.Subscribe(rec, "channel"); err != nil {
+		t.Fatal("Subscribe() ", err)
+	}
+
+	// Waiting for subscription to happen.
+	<-subscribed
+
+	// Publisher
 	publisher := New()
 
-	err = publisher.Connect(testHost, testPort)
-
-	if err != nil {
-		t.Fatalf("Connect failed: %v", err)
+	if err = publisher.Connect(testHost, testPort); err != nil {
+		t.Fatal("Failed to connect: ", err)
 	}
 
 	// Publishing
-	for i := 0; i < 200; i++ {
-		_, err = publisher.Publish("channel", i)
+	var clients int64
+	for i := 0; i < tests; i++ {
+		mu.Lock()
+		clients, err = publisher.Publish("channel", i)
 		if err != nil {
-			t.Fatalf("Error: %s", err.Error())
+			t.Fatal("Publish(): ", err)
 		}
+		if clients < 1 {
+			t.Fatal("We should have at least one subscribed client.")
+		}
+		wg.Add(1)
+		mu.Unlock()
 	}
 
-	publisher.Quit()
+	// Waiting jobs to finish.
+	wg.Wait()
+
+	if _, err = publisher.Quit(); err != nil {
+		t.Fatal("Quit(): ", err)
+	}
+
+	if err = consumer.Unsubscribe("channel"); err != nil {
+		t.Fatal("Unsubscribe(): ", err)
+	}
+
+	if _, err = consumer.Quit(); err != nil {
+		t.Fatal("Quit(): ", err)
+	}
+
+	// Verifying data map.
+	for i := 0; i < tests; i++ {
+		if received[i] == false {
+			t.Fatal(`The "test" map should be populated with true values.`)
+		}
+	}
 }
 
 func TestSubscriptions(t *testing.T) {
 	var ls []string
-
 	var err error
 
 	consumer := New()
 
-	err = consumer.Connect(testHost, testPort)
+	if err = consumer.Connect(testHost, testPort); err != nil {
+		t.Fatal("Failed to connect: ", err)
+	}
 
-	consumer.Set("test", "TestSubscriptions")
-
-	if err != nil {
-		t.Fatalf("Connect failed: %v", err)
+	if _, err = consumer.Set("test", "TestSubscriptions"); err != nil {
+		t.Fatal("Command SET failed: ", err)
 	}
 
 	rec := make(chan []string)
