@@ -1167,6 +1167,40 @@ func TestZSet(t *testing.T) {
 
 }
 
+func TestSubscribe(t *testing.T) {
+	var ls []string
+	var err error
+
+	ok := make(chan bool)
+
+	consumer := New()
+
+	if err = consumer.Connect(testHost, testPort); err != nil {
+		t.Fatal("Failed to connect: ", err)
+	}
+
+	rec := make(chan []string)
+
+	go func() {
+		select {
+		case ls = <-rec:
+			t.Logf("Got: %v\n", ls)
+			ok <- true
+			return
+		}
+	}()
+
+	if err = consumer.Subscribe(rec, "channel"); err != nil {
+		t.Fatal("Failed to subscribe: ", err)
+	}
+
+	<-ok
+
+	consumer.Unsubscribe("channel")
+
+	consumer.Quit()
+}
+
 func TestPublishAndSubscribe(t *testing.T) {
 	var err error
 	var received map[int]bool
@@ -1261,18 +1295,16 @@ func TestPublishAndSubscribe(t *testing.T) {
 	}
 }
 
-func TestSubscriptions(t *testing.T) {
+func TestPSubscribe(t *testing.T) {
 	var ls []string
 	var err error
+
+	ok := make(chan bool)
 
 	consumer := New()
 
 	if err = consumer.Connect(testHost, testPort); err != nil {
 		t.Fatal("Failed to connect: ", err)
-	}
-
-	if _, err = consumer.Set("test", "TestSubscriptions"); err != nil {
-		t.Fatal("Command SET failed: ", err)
 	}
 
 	rec := make(chan []string)
@@ -1281,45 +1313,114 @@ func TestSubscriptions(t *testing.T) {
 		select {
 		case ls = <-rec:
 			t.Logf("Got: %v\n", ls)
+			ok <- true
+			return
 		}
 	}()
 
-	go consumer.Subscribe(rec, "channel")
-
-	consumer.Unsubscribe("channel")
-
-	consumer.Quit()
-}
-
-func TestPSubscriptions(t *testing.T) {
-	var ls []string
-
-	var err error
-
-	consumer := New()
-
-	err = consumer.Connect(testHost, testPort)
-
-	if err != nil {
-		t.Fatalf("Connect failed: %v", err)
+	if err = consumer.PSubscribe(rec, "channel"); err != nil {
+		t.Fatal("Failed to subscribe: ", err)
 	}
 
-	consumer.Set("test", "TestPSubscriptions")
-
-	rec := make(chan []string)
-
-	go func() {
-		select {
-		case ls = <-rec:
-			t.Logf("Got: %v (%d)\n", ls)
-		}
-	}()
-
-	go consumer.PSubscribe(rec, "channel")
+	<-ok
 
 	consumer.PUnsubscribe("channel")
 
 	consumer.Quit()
+}
+
+func TestPublishAndPSubscribe(t *testing.T) {
+	var err error
+	var received map[int]bool
+	var tests int
+
+	wg := new(sync.WaitGroup)
+
+	mu := new(sync.Mutex)
+
+	tests = 10
+
+	// Subscriber
+	consumer := New()
+
+	if err = consumer.Connect(testHost, testPort); err != nil {
+		t.Fatal("Failed to connect: ", err)
+	}
+
+	rec := make(chan []string, tests)
+
+	psubscribed := make(chan bool)
+
+	go func() {
+		received = make(map[int]bool)
+		for {
+			// Receiving messages.
+			select {
+			case ls := <-rec:
+				if ls[0] == `pmessage` {
+					i, _ := strconv.Atoi(ls[3])
+					received[i] = true
+					// Marking job as done.
+					wg.Done()
+				} else if ls[0] == `psubscribe` {
+					psubscribed <- true
+				} else if ls[0] == `punsubscribe` {
+					return
+				}
+			}
+		}
+	}()
+
+	if err = consumer.PSubscribe(rec, "channe?"); err != nil {
+		t.Fatal("Subscribe() ", err)
+	}
+
+	// Waiting for subscription to happen.
+	<-psubscribed
+
+	// Publisher
+	publisher := New()
+
+	if err = publisher.Connect(testHost, testPort); err != nil {
+		t.Fatal("Failed to connect: ", err)
+	}
+
+	// Publishing
+	var clients int64
+	for i := 0; i < tests; i++ {
+		mu.Lock()
+		clients, err = publisher.Publish("channel", i)
+		if err != nil {
+			t.Fatal("Publish(): ", err)
+		}
+		if clients < 1 {
+			t.Fatal("We should have at least one subscribed client.")
+		}
+		wg.Add(1)
+		mu.Unlock()
+	}
+
+	// Waiting jobs to finish.
+	wg.Wait()
+
+	if _, err = publisher.Quit(); err != nil {
+		t.Fatal("Quit(): ", err)
+	}
+
+	if err = consumer.PUnsubscribe("channel"); err != nil {
+		t.Fatal("PUnsubscribe(): ", err)
+	}
+
+	if _, err = consumer.Quit(); err != nil {
+		t.Fatal("Quit(): ", err)
+	}
+
+	// Verifying data map.
+	for i := 0; i < tests; i++ {
+		if received[i] == false {
+			t.Fatal(`The "test" map should be populated with true values.`)
+		}
+	}
 }
 
 func TestTransactions(t *testing.T) {
