@@ -1,10 +1,12 @@
-# gosexy/redis
+# menteslibres.net/gosexy/redis
 
-Provides Go bindings for the official C [redis][1] client ([hiredis][2]).
+The `redis` package is yet another native redis client for Go.
 
 [![Build Status](https://travis-ci.org/gosexy/redis.png)](https://travis-ci.org/gosexy/redis)
 
 ## How to install or upgrade
+
+Use `go get` to install or upgrade (`-u`) the `redis` package.
 
 ```
 go get -u menteslibres.net/gosexy/redis
@@ -12,17 +14,18 @@ go get -u menteslibres.net/gosexy/redis
 
 ## Usage
 
-Install the package with `go get` and use the `import` keyword to use it in
-your program.
+Use `import` to use `redis` in your program:
 
 ```
-import "menteslibres.net/gosexy/redis"
+import (
+	"menteslibres.net/gosexy/redis"
+)
 ```
 
-The `redis.New()` function returns a `*redis.Client` struct that you can use to
-interact with any redis server.
+The `redis.New()` function returns a `*redis.Client` pointer that you can use
+to interact with any redis server.
 
-This is a code example on how to connect and send a `PING` command.
+This example shows how to connect and ping a redis server.
 
 ```go
 var client *redis.Client
@@ -63,8 +66,6 @@ This is the expected output of the above
 Always use `client.Quit()` to close the client connection.
 
 ## Examples
-
-Some examples are included.
 
 * [PING and PONG](_examples/test-ping/main.go)
 * [GET, SET, and lists](_examples/test-get-set/main.go)
@@ -166,54 +167,7 @@ See the [online docs][6] for gosexy/redis at [godoc.org][5].
 
 Don't forget to check the [complete list of redis commands][7] too!
 
-## Licenses
-
-This library wraps the awesome `hiredis.c` client that is released under this
-license:
-
-```
-/*
- * Copyright (c) 2009-2011, Salvatore Sanfilippo <antirez at gmail dot com>
- * Copyright (c) 2010-2011, Pieter Noordhuis <pcnoordhuis at gmail dot com>
- *
- * All rights reserved.
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions are met:
- *
- *   * Redistributions of source code must retain the above copyright notice,
- *     this list of conditions and the following disclaimer.
- *   * Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution.
- *   * Neither the name of Redis nor the names of its contributors may be used
- *     to endorse or promote products derived from this software without
- *     specific prior written permission.
- *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
- * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
- * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
- * ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
- * LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
- * CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
- * SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
- * INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
- * CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
- * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
- * POSSIBILITY OF SUCH DAMAGE.
- */
-```
-
-It also includes portions of code with the following license:
-
-```
-// Copyright 2009 The Go Authors. All rights reserved.
-// Use of this source code is governed by a BSD-style
-// license that can be found in the LICENSE file.
-```
-
-The code that wraps them all, `gosexy/redis`, is released under an equally
-friendly license:
+## License
 
 > Copyright (c) 2013-2014 José Carlos Nieto, https://menteslibres.net/xiam
 >
@@ -237,10 +191,8 @@ friendly license:
 > WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 [1]: http://redis.io
-[2]: https://github.com/redis/hiredis
 [3]: http://golang.org/doc/effective_go.html#channels
 [4]: http://golang.org/doc/effective_go.html#goroutines
 [5]: http://godoc.org
 [6]: http://godoc.org/menteslibres.net/gosexy/redis
 [7]: http://redis.io/commands
-[8]: https://github.com/gosexy/redis/tree/master/_benchmarks

@@ -1,3 +1,24 @@
+// Copyright (c) 2013-2014 José Carlos Nieto, https://menteslibres.net/xiam
+//
+// Permission is hereby granted, free of charge, to any person obtaining
+// a copy of this software and associated documentation files (the
+// "Software"), to deal in the Software without restriction, including
+// without limitation the rights to use, copy, modify, merge, publish,
+// distribute, sublicense, and/or sell copies of the Software, and to
+// permit persons to whom the Software is furnished to do so, subject to
+// the following conditions:
+//
+// The above copyright notice and this permission notice shall be
+// included in all copies or substantial portions of the Software.
+//
+// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+// NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE
+// LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION
+// OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+// WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 package redis
 
 import (
@@ -5,7 +26,6 @@ import (
 	"bytes"
 	"errors"
 	"github.com/xiam/resp"
-	"io"
 	"net"
 	"strconv"
 	"sync"
@@ -13,7 +33,6 @@ import (
 )
 
 var (
-	ErrBadLine         = errors.New(`Bad line.`)
 	ErrUnknownResponse = errors.New(`Unknown response.`)
 	ErrNotEnoughData   = errors.New(`Not enough data.`)
 )
@@ -36,23 +55,12 @@ const (
 )
 
 type conn struct {
-	conn          net.Conn
-	subscription  bool
-	writeBuf      chan []byte
-	shouldWrite   chan bool
-	shouldRead    chan bool
-	writer        *bytes.Buffer
-	readerBuf     *bytes.Buffer
-	quitReading   chan bool
-	quitWriting   chan bool
-	quit          chan bool
-	reader        *bufio.Reader
-	timeout       time.Duration
-	commandMutex  *sync.Mutex
-	readerMutex   *sync.Mutex
-	writerMutex   *sync.Mutex
-	readLineMutex *sync.Mutex
-	lineBuf       []chan []byte
+	conn         net.Conn
+	subscription bool
+	timeout      time.Duration
+	mu           *sync.Mutex
+	reader       *bufio.Reader
+	writer       *bufio.Writer
 }
 
 func dial(network string, address string) (*conn, error) {
@@ -64,231 +72,37 @@ func dial(network string, address string) (*conn, error) {
 	}
 
 	c := &conn{
-		conn:          nc,
-		timeout:       defaultTimeout,
-		writer:        bytes.NewBuffer(nil),
-		readerBuf:     bytes.NewBuffer(nil),
-		readerMutex:   new(sync.Mutex),
-		commandMutex:  new(sync.Mutex),
-		writerMutex:   new(sync.Mutex),
-		readLineMutex: new(sync.Mutex),
-		quitReading:   make(chan bool),
-		quitWriting:   make(chan bool),
-		quit:          make(chan bool),
-		shouldWrite:   make(chan bool, channelBufferSize),
-		shouldRead:    make(chan bool, channelBufferSize),
-		writeBuf:      make(chan []byte, channelBufferSize),
-		lineBuf:       make([]chan []byte, 0, channelBufferSize),
+		conn:    nc,
+		timeout: defaultTimeout,
+		mu:      &sync.Mutex{},
 	}
 
-	c.reader = bufio.NewReader(c.readerBuf)
-
-	go c.asyncStatus()
-
-	go c.asyncConnReader()
-
-	go c.asyncConnWriter()
-
-	go c.asyncReadWriter()
+	c.reader = bufio.NewReader(c.conn)
+	c.writer = bufio.NewWriter(c.conn)
 
 	return c, nil
 }
 
-func (self *conn) asyncStatus() {
-	for {
-		select {
-		case <-self.quit:
-			if self.conn != nil {
-				self.quitWriting <- true
-				self.quitReading <- true
-				close(self.quit)
-				close(self.quitWriting)
-				close(self.quitReading)
-				close(self.shouldRead)
-				close(self.shouldWrite)
-				close(self.writeBuf)
-			}
-			return
-		}
-	}
-}
-
-func (self *conn) writeNextLine(data []byte) error {
-	self.writeBuf <- data
-	return nil
-}
-
-func (self *conn) reserveNextLine() chan []byte {
-	nextLine := make(chan []byte)
-	self.lineBuf = append(self.lineBuf, nextLine)
-	return nextLine
-}
-
-func (self *conn) asyncConnReader() {
-	var err error
-	var data []byte
-	var n int
-
-	for {
-		data = make([]byte, readBufferSize)
-		if n, err = self.conn.Read(data); err != nil {
-			if err == io.EOF {
-				self.close()
-			}
-			//log.Printf("read error(1): %q\n", err)
-			return
-		}
-		if n > 0 {
-			//log.Printf("n: %d: %#v\n", n, string(data[:n]))
-
-			self.readerBuf.Write(data[:n])
-			self.shouldRead <- true
-		}
-	}
-
-}
-
-func (self *conn) asyncReadWriter() {
-	var err error
-	var next []byte
-
-	for {
-		select {
-		case <-self.quitReading:
-			return
-		case <-self.shouldRead:
-			//self.readerMutex.Lock()
-			for {
-				if self.readerBuf.Len()+self.reader.Buffered() > 0 {
-					if next, err = self.readNextMessage(); err != nil {
-						//log.Printf("next message error(2): %q\n", err)
-						break
-					}
-					if len(self.lineBuf) > 0 {
-						self.lineBuf[0] <- next
-						self.lineBuf = self.lineBuf[1:]
-					} else {
-						//log.Printf("no buff\n")
-					}
-					//log.Printf("NEXT: %#v\n", string(next))
-					//self.readBuf <- next
-				} else {
-					//log.Println("ignored read\n")
-					break
-				}
-			}
-			//self.readerMutex.Unlock()
-		case <-self.shouldWrite:
-			if self.writer.Len() > 0 {
-				self.writerMutex.Lock()
-				if err = self.write(self.writer.Bytes()); err != nil {
-					//log.Printf("write error: %q\n", err)
-					continue
-				}
-				//log.Printf("written %d messages.\n", self.writer.Len())
-				self.writer.Reset()
-				self.writerMutex.Unlock()
-				//log.Printf("write ok\n")
-			} else {
-				//log.Printf("ignored message\n")
-			}
-		}
-	}
-
-}
-
-func (self *conn) asyncConnWriter() {
-	var message []byte
-
-	for {
-		select {
-		case <-self.quitWriting:
-			return
-		case message = <-self.writeBuf:
-			self.writerMutex.Lock()
-			self.writer.Write(message)
-			self.writerMutex.Unlock()
-			self.shouldWrite <- true
-		}
-	}
-}
-
-func (self *conn) peekNextLine() (buf []byte, err error) {
-	var n int
-
-	//log.Printf("peekNextLine\n")
-
-	b := self.readerBuf.Len() + self.reader.Buffered()
-	if b > 100 {
-		b = 100
-	}
-	//log.Printf("peeking :%d\n", b)
-
-	if buf, err = self.reader.Peek(b); err != nil {
-		//log.Printf("peek error: %q\n", err)
-		return nil, err
-	}
-
-	if n = bytes.IndexByte(buf, endOfLine[1]); n < 0 {
-		return nil, ErrNotEnoughData
-	}
-
-	//log.Printf("peekd: %#v\n", string(buf[:n+1]))
-
-	return buf[:n+1], nil
-}
-
-func (self *conn) readNextLine() (data []byte, err error) {
-	self.readLineMutex.Lock()
-	defer self.readLineMutex.Unlock()
-
-	if data, err = self.reader.ReadBytes(endOfLine[1]); err != nil {
-		//log.Printf("last line err: %q\n", err)
-		return nil, err
-	}
-
-	//log.Printf("L: %#v\n", string(data))
-
-	return data, err
-}
-
-func (self *conn) readNextMessage() ([]byte, error) {
+func (c *conn) read() (buf []byte, err error) {
 	var head []byte
-	var err error
-
-	// log.Println("readNExtMessage")
-
-	/*
-		self.readerMutex.Lock()
-
-		defer func() {
-			self.readerMutex.Unlock()
-		}()
-	*/
 
 	// Attempts to read message type.
-	if head, err = self.reader.Peek(1); err != nil {
+	if head, err = c.reader.Peek(1); err != nil {
 		return nil, err
 	}
-
-	// log.Printf("peek: %#v\n", string(head))
 
 	switch head[0] {
 	case respStringByte:
-		//log.Println("STRING")
-		return self.readNextLine()
+		return c.readNextLine()
 	case respIntegerByte:
-		//log.Println("INTEGER")
-		return self.readNextLine()
+		return c.readNextLine()
 	case respErrorByte:
-		//log.Println("BYTE")
-		return self.readNextLine()
+		return c.readNextLine()
 	case respArrayByte:
-		//log.Println("ARRAY")
 		var size int
 		var buf []byte
 
-		if buf, err = self.readNextLine(); err != nil {
+		if buf, err = c.readNextLine(); err != nil {
 			return nil, err
 		}
 
@@ -297,20 +111,16 @@ func (self *conn) readNextMessage() ([]byte, error) {
 		}
 
 		if size < 0 {
-			return self.readNextLine()
+			return c.readNextLine()
 		}
 
 		var data []byte
 		for i := 0; i < size; i++ {
-			if data, err = self.readNextMessage(); err != nil {
-				//log.Printf("exitr\n")
+			if data, err = c.read(); err != nil {
 				return nil, err
 			}
-			//log.Printf("OK ARRAY\n")
 			buf = append(buf, data...)
 		}
-
-		//log.Printf("S(1): %#v\n", string(buf))
 
 		return buf, nil
 	case respBulkByte:
@@ -318,9 +128,7 @@ func (self *conn) readNextMessage() ([]byte, error) {
 		var data []byte
 		var size int
 
-		//log.Println("BULK")
-
-		if buf, err = self.peekNextLine(); err != nil {
+		if buf, err = c.peekNextLine(); err != nil {
 			return nil, err
 		}
 
@@ -328,22 +136,12 @@ func (self *conn) readNextMessage() ([]byte, error) {
 			return nil, err
 		}
 
-		//log.Printf("size: %d\n", size)
-
 		// Nil
 		if size < 1 {
-			return self.readNextLine()
+			return c.readNextLine()
 		}
 
 		size = len(buf) + size + 2
-
-		if self.reader.Buffered()+self.readerBuf.Len() < size {
-			//log.Println("BULK: not enough data.")
-			//log.Printf("got: %d, expecting: %d\n", self.reader.Buffered(), size)
-			//log.Printf("buf: %d\n", self.readerBuf.Len())
-			//log.Printf("buf: %#v\n", string(buf))
-			return buf, ErrNotEnoughData
-		}
 
 		if size > 0 {
 			var n int
@@ -351,20 +149,13 @@ func (self *conn) readNextMessage() ([]byte, error) {
 
 			for size > 0 {
 				chunk := make([]byte, size)
-				if n, err = self.reader.Read(chunk); err != nil {
+				if n, err = c.reader.Read(chunk); err != nil {
 					return nil, err
 				}
 				data = append(data, chunk[:n]...)
 				size = size - n
-				//log.Printf("remaining: %d, n: %d\n", size, n)
 			}
-
-			//data = append(buf, data...)
-
-			//log.Printf("S(2): %#v\n", string(data))
 		}
-
-		//log.Printf("S: %#v\n", string(data))
 
 		return data, nil
 	}
@@ -372,7 +163,40 @@ func (self *conn) readNextMessage() ([]byte, error) {
 	return nil, ErrUnknownResponse
 }
 
-func (self *conn) writeCommand(command ...interface{}) error {
+func (c *conn) write(message []byte) (err error) {
+	_, err = c.writer.Write(message)
+	c.writer.Flush()
+	return
+}
+
+func (c *conn) peekNextLine() (buf []byte, err error) {
+	var n int
+
+	b := c.reader.Buffered()
+	if b > 100 {
+		b = 100
+	}
+
+	if buf, err = c.reader.Peek(b); err != nil {
+		return nil, err
+	}
+
+	if n = bytes.IndexByte(buf, endOfLine[1]); n < 0 {
+		return nil, ErrNotEnoughData
+	}
+
+	return buf[:n+1], nil
+}
+
+func (c *conn) readNextLine() (data []byte, err error) {
+	if data, err = c.reader.ReadBytes(endOfLine[1]); err != nil {
+		return nil, err
+	}
+
+	return data, err
+}
+
+func (c *conn) writeCommand(command ...interface{}) error {
 	var data []byte
 	var err error
 
@@ -380,84 +204,22 @@ func (self *conn) writeCommand(command ...interface{}) error {
 		return err
 	}
 
-	return self.writeNextLine(data)
+	return c.write(data)
 }
 
-func (self *conn) write(data []byte) error {
-	var err error
-
-	//log.Printf("C: %#v\n", string(data))
-
-	if _, err = self.conn.Write(data); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (self *conn) close() error {
-	//log.Printf("connection closed\n")
-	if self.conn != nil {
-		self.conn.Close()
-		self.quit <- true
-		self.conn = nil
+func (c *conn) close() error {
+	if c.conn != nil {
+		c.conn.Close()
+		c.conn = nil
 	}
 	return nil
 }
 
-func (self *conn) asyncCommand(dest interface{}, command ...interface{}) (chan error, error) {
-	var buf []byte
-	var errProm chan error
-	var err error
-
-	errProm = make(chan error)
-
-	go func() {
-		var data []byte
-
-		if data, err = resp.Marshal(command); err != nil {
-			errProm <- err
-			return
-		}
-
-		var nextLine chan []byte
-
-		self.commandMutex.Lock()
-
-		//log.Printf("Q: %#v\n", string(data))
-
-		self.writeNextLine(data)
-		nextLine = self.reserveNextLine()
-
-		self.commandMutex.Unlock()
-
-		buf = <-nextLine
-
-		if dest == nil {
-			errProm <- nil
-			return
-		}
-
-		errProm <- resp.Unmarshal(buf, dest)
-	}()
-
-	return errProm, nil
-}
-
-func (self *conn) read() ([]byte, error) {
-	var nextLine chan []byte
-	var buf []byte
-	nextLine = self.reserveNextLine()
-	buf = <-nextLine
-	return buf, nil
-}
-
-func (self *conn) bcommand(c chan []string, command ...interface{}) error {
+func (c *conn) syncCommand(dest interface{}, command ...[]byte) (err error) {
 	var data []byte
 	var buf []byte
-	var err error
 
-	if self.conn == nil {
+	if c.conn == nil {
 		return ErrNotConnected
 	}
 
@@ -465,83 +227,24 @@ func (self *conn) bcommand(c chan []string, command ...interface{}) error {
 		return err
 	}
 
-	self.commandMutex.Lock()
+	// This is an atomic operation, for now.
+	c.mu.Lock()
 
-	//log.Printf("Q: %#v\n", string(data))
-
-	self.writeNextLine(data)
-
-	self.commandMutex.Unlock()
-
-	if c != nil {
-		go func(c chan []string) {
-			var err error
-
-			self.subscription = true
-
-			for self.subscription {
-
-				var message []string
-
-				var nextLine chan []byte
-
-				//log.Println("XXX(0)")
-
-				nextLine = self.reserveNextLine()
-
-				buf = <-nextLine
-
-				err = resp.Unmarshal(buf, &message)
-
-				if err == resp.ErrMessageIsNil {
-					break
-				}
-
-				c <- message
-
-				if message[0] == `unsubscribe` {
-					return
-				}
-
-			}
-
-		}(c)
-	}
-
-	return nil
-}
-
-func (self *conn) command(dest interface{}, command ...interface{}) error {
-	var data []byte
-	var buf []byte
-	var err error
-
-	if self.conn == nil {
-		return ErrNotConnected
-	}
-
-	if data, err = resp.Marshal(command); err != nil {
+	if err = c.write(data); err != nil {
 		return err
 	}
 
-	var nextLine chan []byte
+	if buf, err = c.read(); err != nil {
+		return err
+	}
 
-	self.commandMutex.Lock()
+	c.mu.Unlock()
 
-	//log.Printf("Q: %#v\n", string(data))
+	if dest == nil {
+		return nil
+	}
 
-	self.writeNextLine(data)
-	nextLine = self.reserveNextLine()
-
-	self.commandMutex.Unlock()
-
-	//log.Printf("waitforbuf\n")
-
-	buf = <-nextLine
-
-	//log.Printf("waitforbuf(2)\n")
-
-	if dest == nil || len(buf) == 0 {
+	if len(buf) == 0 {
 		return ErrNilReply
 	}
 
@@ -549,6 +252,56 @@ func (self *conn) command(dest interface{}, command ...interface{}) error {
 
 	if err == resp.ErrMessageIsNil {
 		return ErrNilReply
+	}
+
+	return err
+}
+
+func (c *conn) asyncCommand(dest interface{}, command ...[]byte) (chan error, error) {
+	var errProm chan error
+
+	errProm = make(chan error)
+
+	go func() {
+		// TODO: make it actually asynchronous.
+		err := c.syncCommand(dest, command...)
+		errProm <- err
+	}()
+
+	return errProm, nil
+}
+
+func (c *conn) blockCommand(d chan []string, command ...[]byte) error {
+	var data []byte
+	var err error
+
+	if data, err = resp.Marshal(command); err != nil {
+		return err
+	}
+
+	c.mu.Lock()
+
+	if err = c.write(data); err != nil {
+		return err
+	}
+
+	c.mu.Unlock()
+
+	c.subscription = true
+
+	if d != nil {
+		go func(d chan []string) {
+			var buf []byte
+			for c.subscription {
+				var s []string
+				buf, err = c.read()
+				if err != nil {
+					return
+				}
+				err = resp.Unmarshal(buf, &s)
+				d <- s
+			}
+		}(d)
 	}
 
 	return err

@@ -206,7 +206,7 @@ func TestNoCGOPingCommand(t *testing.T) {
 
 	defer c.close()
 
-	if err = c.command(&dest, []byte("PING")); err != nil {
+	if err = c.syncCommand(&dest, []byte("PING")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -226,13 +226,13 @@ func TestNoCGODelSetGetCommand(t *testing.T) {
 
 	defer c.close()
 
-	if err = c.command(nil, []byte("DEL"), []byte("testKey")); err != nil {
+	if err = c.syncCommand(nil, []byte("DEL"), []byte("testKey")); err != nil {
 		if err != ErrNilReply {
 			t.Fatal(err)
 		}
 	}
 
-	if err = c.command(&s, []byte("SET"), []byte("testKey"), []byte("Foo Bar!")); err != nil {
+	if err = c.syncCommand(&s, []byte("SET"), []byte("testKey"), []byte("Foo Bar!")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -240,7 +240,7 @@ func TestNoCGODelSetGetCommand(t *testing.T) {
 		t.Fatal()
 	}
 
-	if err = c.command(&s, []byte("GET"), []byte("testKey")); err != nil {
+	if err = c.syncCommand(&s, []byte("GET"), []byte("testKey")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -282,6 +282,7 @@ func TestNoCGOAsyncCommand(t *testing.T) {
 			}
 
 			err = <-errProm
+
 			if err != nil {
 				log.Fatalf("async(2): %q\n", err)
 			}

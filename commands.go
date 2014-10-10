@@ -24,8 +24,13 @@ package redis
 import (
 	"errors"
 	"fmt"
+	"io"
 	"menteslibres.net/gosexy/to"
 	"strings"
+)
+
+var (
+	commandPing = []byte(`PING`)
 )
 
 // If key already exists and is a string, this command appends the value at the
@@ -1414,21 +1419,19 @@ func (self *Client) PExpireAt(key string, milliseconds int64) (bool, error) {
 	return ret, err
 }
 
-/*
-Returns PONG. This command is often used to test if a connection is still alive,
-or to measure latency.
+// Ping() Returns PONG. This command is often used to
+// test if a connection is still alive, or to measure
+// latency.
+//
+// Reference: http://redis.io/commands/ping
+func (self *Client) Ping() (ret string, err error) {
 
-http://redis.io/commands/ping
-*/
-func (self *Client) Ping() (string, error) {
-	var ret string
-
-	err := self.command(
+	err = self.command(
 		&ret,
-		[]byte("PING"),
+		[]byte(`PING`),
 	)
 
-	return ret, err
+	return
 }
 
 /*
@@ -1555,11 +1558,18 @@ pending replies have been written to the client.
 http://redis.io/commands/quit
 */
 func (self *Client) Quit() (s string, err error) {
+
 	err = self.command(
 		&s,
 		[]byte("QUIT"),
 	)
+
 	self.redis.close()
+
+	if err == io.EOF {
+		err = nil
+	}
+
 	return s, err
 }
 
@@ -1968,17 +1978,16 @@ overwritten, regardless of its type.
 
 http://redis.io/commands/set
 */
-func (self *Client) Set(key string, value interface{}) (string, error) {
-	var ret string
+func (self *Client) Set(key string, value interface{}) (ret string, err error) {
 
-	err := self.command(
+	err = self.command(
 		&ret,
 		[]byte("SET"),
 		[]byte(key),
 		to.Bytes(value),
 	)
 
-	return ret, err
+	return
 }
 
 /*

@@ -19,16 +19,18 @@
 // OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+// The `redis` package is yet another Go client library for redis-server.
 package redis
 
 import (
 	"errors"
 	"fmt"
+	"menteslibres.net/gosexy/to"
 	"time"
 )
 
 const (
-	// Default port for connecting to redis.
+	// Default port for connecting to redis-server.
 	DefaultPort = 6379
 )
 
@@ -84,68 +86,59 @@ func (self *Client) Connect(host string, port uint) (err error) {
 		self.Close()
 	}
 
-	if self.redis, err = dial(`tcp`, fmt.Sprintf(`%s:%d`, host, port)); err != nil {
+	connURL := fmt.Sprintf(`%s:%d`, host, port)
+
+	if self.redis, err = dial(`tcp`, connURL); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// Connects to the given host and port, giving up after timeout.
+// ConnectWithTimeout attempts to connect to a redis-server, giving up after
+// the specified time.
 func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
-	// TODO: Actually apply timeout.
+	// TODO: Actually apply a timeout ;-).
 	return self.Connect(host, port)
 }
 
-// Creates a non-blocking connection between the client and the given UNIX
-// socket.
+// ConnectUnixNonBlock attempts to create a non-blocking connection with an
+// UNIX socket.
 func (self *Client) ConnectUnixNonBlock(path string) error {
 	return ErrNotConnected
 }
 
-// Connects the client to the given UNIX socket.
+// ConnectUnix attempts to create a connection with a UNIX socket.
 func (self *Client) ConnectUnix(path string) error {
 	return ErrNotConnected
 }
 
-// Connects the client to the given UNIX socket, giving up after timeout.
+// ConnectUnixWithTimeout attempts to create a connection with an UNIX socket,
+// giving up after the specified time.
 func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) error {
 	return ErrNotConnected
 }
 
-// Sends a raw command and stores the response into a destination variable.
+// Command builds a command specified by the `values` interface and stores the
+// result into the variable pointed by `dest`.
 func (self *Client) Command(dest interface{}, values ...interface{}) error {
 	if self == nil {
 		return ErrNotInitialized
 	}
+	bvalues := make([][]byte, len(values))
+	// Converting all input values into []byte.
 	for i := range values {
-		switch values[i].(type) {
-		case []byte:
-		default:
-			values[i] = []byte(fmt.Sprintf("%v", values[i]))
-		}
+		bvalues[i] = to.Bytes(values[i])
 	}
-	return self.redis.command(dest, values...)
+	// Sending command to redis-server.
+	return self.command(dest, bvalues...)
 }
 
+// Sendind a command and blocking until an answer is received.
 func (self *Client) bcommand(c chan []string, values ...[]byte) error {
-	if self == nil {
-		return ErrNotInitialized
-	}
-	ivalues := make([]interface{}, len(values))
-	for i := 0; i < len(values); i++ {
-		ivalues[i] = values[i]
-	}
-	return self.redis.bcommand(c, ivalues...)
+	return self.redis.blockCommand(c, values...)
 }
 
 func (self *Client) command(dest interface{}, values ...[]byte) error {
-	if self == nil {
-		return ErrNotInitialized
-	}
-	ivalues := make([]interface{}, len(values))
-	for i := 0; i < len(values); i++ {
-		ivalues[i] = values[i]
-	}
-	return self.redis.command(dest, ivalues...)
+	return self.redis.syncCommand(dest, values...)
 }
