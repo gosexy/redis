@@ -11,7 +11,11 @@ var alphazeroRedisClient redis.Client
 func TestAlphazeroRedisConnect(t *testing.T) {
 	var err error
 
-	alphazeroRedisClient, err = redis.NewSynchClientWithSpec(redis.DefaultSpec())
+	spec := redis.DefaultSpec()
+
+	spec.Host(host)
+
+	alphazeroRedisClient, err = redis.NewSynchClientWithSpec(spec)
 
 	if err != nil {
 		t.Fatalf("Connect failed: %v", err)

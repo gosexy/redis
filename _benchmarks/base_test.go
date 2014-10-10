@@ -1,4 +1,7 @@
 package main
 
-var host = "127.0.0.1"
-var port = uint(6379)
+var (
+	//host = "10.1.2.201"
+	host = "127.0.0.1"
+	port = uint(6379)
+)

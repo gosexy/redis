@@ -1,101 +1,112 @@
 package main
 
 import (
-	"code.google.com/p/tcgl/redis"
 	"fmt"
+	"github.com/tideland/godm/v3/redis"
 	"testing"
 )
 
-var tcglRedisClient *redis.Database
+var tcglRedisClient *redis.Connection
 
 func TestTcglRedisConnect(t *testing.T) {
-	tcglRedisClient = redis.Connect(redis.Configuration{Address: fmt.Sprintf("%s:%d", host, port)})
+	option := redis.TcpConnection(fmt.Sprintf(`%s:%d`, host, port), 0)
+	db, err := redis.Open(option)
 
-	res := tcglRedisClient.Command("PING")
-
-	if res.Error() != nil {
-		t.Fatalf("Command failed: %v", res.Error())
+	if err != nil {
+		t.Fatal(err)
 	}
 
-	if res.ValueAsString() != "PONG" {
+	tcglRedisClient, err = db.Connection()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := tcglRedisClient.DoString("PING")
+
+	if err != nil {
+		t.Fatalf("Do failed: %q", err)
+	}
+
+	if s != "+PONG" {
 		t.Fatalf("Failed")
 	}
 }
 
 func BenchmarkTcglRedisPing(b *testing.B) {
-	var res *redis.ResultSet
-	tcglRedisClient.Command("DEL", "hello")
+	var err error
+	tcglRedisClient.Do("DEL", "hello")
 	for i := 0; i < b.N; i++ {
-		res = tcglRedisClient.Command("PING")
-		if res.Error() != nil {
-			b.Fatalf(res.Error().Error())
+		_, err = tcglRedisClient.Do("PING")
+		if err != nil {
+			b.Fatal(err)
 			break
 		}
 	}
 }
 
 func BenchmarkTcglRedisSet(b *testing.B) {
-	var res *redis.ResultSet
+	var err error
 	for i := 0; i < b.N; i++ {
-		res = tcglRedisClient.Command("SET", "hello", 1)
-		if res.Error() != nil {
-			b.Fatalf(res.Error().Error())
+		_, err = tcglRedisClient.Do("SET", "hello", 1)
+		if err != nil {
+			b.Fatal(err)
 			break
 		}
 	}
 }
 
 func BenchmarkTcglRedisGet(b *testing.B) {
-	var res *redis.ResultSet
+	var err error
 	for i := 0; i < b.N; i++ {
-		res = tcglRedisClient.Command("GET", "hello")
-		if res.Error() != nil {
-			b.Fatalf(res.Error().Error())
+		_, err = tcglRedisClient.Do("GET", "hello")
+		if err != nil {
+			b.Fatal(err)
 			break
 		}
 	}
 }
 
 func BenchmarkTcglRedisIncr(b *testing.B) {
-	var res *redis.ResultSet
+	var err error
 	for i := 0; i < b.N; i++ {
-		res = tcglRedisClient.Command("INCR", "hello")
-		if res.Error() != nil {
-			b.Fatalf(res.Error().Error())
+		_, err = tcglRedisClient.Do("INCR", "hello")
+		if err != nil {
+			b.Fatal(err)
 			break
 		}
 	}
 }
 
 func BenchmarkTcglRedisLPush(b *testing.B) {
-	var res *redis.ResultSet
-	tcglRedisClient.Command("DEL", "hello")
+	var err error
+	tcglRedisClient.Do("DEL", "hello")
 	for i := 0; i < b.N; i++ {
-		res = tcglRedisClient.Command("LPUSH", "hello", i)
-		if res.Error() != nil {
-			b.Fatalf(res.Error().Error())
+		_, err = tcglRedisClient.Do("LPUSH", "hello", i)
+		if err != nil {
+			b.Fatal(err)
 			break
 		}
 	}
 }
 
 func BenchmarkTcglRedisLRange10(b *testing.B) {
-	var res *redis.ResultSet
+	var err error
 	for i := 0; i < b.N; i++ {
-		res = tcglRedisClient.Command("LRANGE", "hello", 0, 10)
-		if res.Error() != nil {
-			b.Fatalf(res.Error().Error())
+		_, err = tcglRedisClient.Do("LRANGE", "hello", 0, 10)
+		if err != nil {
+			b.Fatal(err)
 			break
 		}
 	}
 }
 
 func BenchmarkTcglRedisLRange100(b *testing.B) {
-	var res *redis.ResultSet
+	var err error
 	for i := 0; i < b.N; i++ {
-		res = tcglRedisClient.Command("LRANGE", "hello", 0, 100)
-		if res.Error() != nil {
-			b.Fatalf(res.Error().Error())
+		_, err = tcglRedisClient.Do("LRANGE", "hello", 0, 100)
+		if err != nil {
+			b.Fatal(err)
 			break
 		}
 	}

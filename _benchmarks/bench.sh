@@ -6,7 +6,7 @@
 
 go test -test.benchtime=2s -test.bench=. > redis-go-driver-benchmark.tmp
 
-for i in AlphazeroRedis GaryburdRedigo GosexyRedis Simonz05Godis TcglRedis
+for i in AlphazeroRedis GaryburdRedigo GosexyRedis Simonz05Godis
 do
   grep $i redis-go-driver-benchmark.tmp  | awk '{print $3}' > $i.tmp
 done

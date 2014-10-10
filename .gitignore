@@ -1,1 +1,4 @@
 *.swp
+_benchmarks/*.log
+_benchmarks/*.png
+_benchmarks/*.tmp
