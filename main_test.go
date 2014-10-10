@@ -65,7 +65,7 @@ func TestPing(t *testing.T) {
 
 	client = New()
 
-	if err = client.ConnectWithTimeout(testHost, testPort, time.Second*1); err != nil {
+	if err = client.ConnectWithTimeout(testHost, testPort, 0); err != nil {
 		t.Fatalf("Client failed to connect and set a timeout: %q", err)
 	}
 

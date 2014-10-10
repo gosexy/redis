@@ -29,6 +29,8 @@ import (
 	"time"
 )
 
+var defaultTimeout = time.Second * 20
+
 const (
 	// Default port for connecting to redis-server.
 	DefaultPort = 6379
@@ -36,22 +38,12 @@ const (
 
 // Error messages
 var (
-	ErrIO                  = errors.New(`Input/output error.`)
-	ErrEOF                 = errors.New(`Unexpected EOF.`)
-	ErrProtocol            = errors.New(`Protocol error.`)
-	ErrOOM                 = errors.New(`Out of memory.`)
-	ErrOther               = errors.New(`Unknown error.`)
-	ErrFailedAllocation    = errors.New(`Got memory allocation problem.`)
-	ErrNilReply            = errors.New(`Received a nil response.`)
-	ErrNotConnected        = errors.New(`Client is not connected.`)
-	ErrServerIsDown        = errors.New(`Server is down.`)
-	ErrMissingCommand      = errors.New(`Missing command.`)
-	ErrUnexpectedResponse  = errors.New(`Unexpected response from server.`)
-	ErrExpectingPairs      = errors.New(`Expecting (field -> value) pairs.`)
-	ErrNonBlockingRequired = errors.New(`This command requires a non-blocking connection.`)
-	ErrMissingDestination  = errors.New(`Missing destination.`)
-	ErrInvalidDestination  = errors.New(`Destination must be a pointer.`)
-	ErrNotInitialized      = errors.New(`Client is not initialized. Forgot to use redis.New()?`)
+	ErrNilReply        = errors.New(`Received a nil response.`)
+	ErrNotConnected    = errors.New(`Client is not connected.`)
+	ErrExpectingPairs  = errors.New(`Expecting (field -> value) pairs.`)
+	ErrNotInitialized  = errors.New(`Client is not initialized. Forgot to use redis.New()?`)
+	ErrUnknownResponse = errors.New(`Unknown response.`)
+	ErrNotEnoughData   = errors.New(`Not enough data.`)
 )
 
 // A redis client
@@ -77,6 +69,34 @@ func (self *Client) Close() error {
 
 // Connects the client to the given host and port.
 func (self *Client) Connect(host string, port uint) (err error) {
+	return self.dial(`tcp`, fmt.Sprintf(`%s:%d`, host, port))
+}
+
+// ConnectWithTimeout attempts to connect to a redis-server, giving up after
+// the specified time.
+func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
+	return self.dialTimeout(`tcp`, fmt.Sprintf(`%s:%d`, host, port), timeout)
+}
+
+// ConnectUnixNonBlock attempts to create a non-blocking connection with an
+// UNIX socket (deprecated).
+func (self *Client) ConnectUnixNonBlock(path string) error {
+	return self.ConnectUnix(path)
+}
+
+// ConnectUnix attempts to create a connection with a UNIX socket.
+func (self *Client) ConnectUnix(path string) error {
+	return self.dial(`unix`, path)
+}
+
+// ConnectUnixWithTimeout attempts to create a connection with an UNIX socket,
+// giving up after the specified time.
+func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) error {
+	return self.dialTimeout(`unix`, path, timeout)
+}
+
+func (self *Client) dialTimeout(network, address string, timeout time.Duration) error {
+	var err error
 
 	if self == nil {
 		return ErrNotInitialized
@@ -86,37 +106,33 @@ func (self *Client) Connect(host string, port uint) (err error) {
 		self.Close()
 	}
 
-	connURL := fmt.Sprintf(`%s:%d`, host, port)
+	if timeout == 0 {
+		timeout = defaultTimeout
+	}
 
-	if self.redis, err = dial(`tcp`, connURL); err != nil {
+	if self.redis, err = dialTimeout(network, address, timeout); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-// ConnectWithTimeout attempts to connect to a redis-server, giving up after
-// the specified time.
-func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
-	// TODO: Actually apply a timeout ;-).
-	return self.Connect(host, port)
-}
+func (self *Client) dial(network, address string) error {
+	var err error
 
-// ConnectUnixNonBlock attempts to create a non-blocking connection with an
-// UNIX socket.
-func (self *Client) ConnectUnixNonBlock(path string) error {
-	return ErrNotConnected
-}
+	if self == nil {
+		return ErrNotInitialized
+	}
 
-// ConnectUnix attempts to create a connection with a UNIX socket.
-func (self *Client) ConnectUnix(path string) error {
-	return ErrNotConnected
-}
+	if self.redis != nil {
+		self.Close()
+	}
 
-// ConnectUnixWithTimeout attempts to create a connection with an UNIX socket,
-// giving up after the specified time.
-func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) error {
-	return ErrNotConnected
+	if self.redis, err = dial(network, address); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // Command builds a command specified by the `values` interface and stores the

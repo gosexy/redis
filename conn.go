@@ -24,25 +24,12 @@ package redis
 import (
 	"bufio"
 	"bytes"
-	"errors"
 	"github.com/xiam/resp"
 	"net"
 	"strconv"
 	"sync"
 	"time"
 )
-
-var (
-	ErrUnknownResponse = errors.New(`Unknown response.`)
-	ErrNotEnoughData   = errors.New(`Not enough data.`)
-)
-
-const (
-	readBufferSize    = 1024
-	channelBufferSize = 128
-)
-
-var defaultTimeout = time.Second * 20
 
 var endOfLine = []byte{'\r', '\n'}
 
@@ -63,14 +50,7 @@ type conn struct {
 	writer       *bufio.Writer
 }
 
-func dial(network string, address string) (*conn, error) {
-	var nc net.Conn
-	var err error
-
-	if nc, err = net.Dial(network, address); err != nil {
-		return nil, err
-	}
-
+func newConn(nc net.Conn) (*conn, error) {
 	c := &conn{
 		conn:    nc,
 		timeout: defaultTimeout,
@@ -81,6 +61,28 @@ func dial(network string, address string) (*conn, error) {
 	c.writer = bufio.NewWriter(c.conn)
 
 	return c, nil
+}
+
+func dial(network string, address string) (*conn, error) {
+	var nc net.Conn
+	var err error
+
+	if nc, err = net.Dial(network, address); err != nil {
+		return nil, err
+	}
+
+	return newConn(nc)
+}
+
+func dialTimeout(network string, address string, timeout time.Duration) (*conn, error) {
+	var nc net.Conn
+	var err error
+
+	if nc, err = net.DialTimeout(network, address, timeout); err != nil {
+		return nil, err
+	}
+
+	return newConn(nc)
 }
 
 func (c *conn) read() (buf []byte, err error) {
@@ -208,6 +210,7 @@ func (c *conn) writeCommand(command ...interface{}) error {
 }
 
 func (c *conn) close() error {
+	c.subscription = false
 	if c.conn != nil {
 		c.conn.Close()
 		c.conn = nil
