@@ -56,79 +56,79 @@ func New() *Client {
 	return c
 }
 
-func (self *Client) Close() error {
-	if self == nil {
+func (c *Client) Close() error {
+	if c == nil {
 		return ErrNotConnected
 	}
-	if self.redis != nil {
-		self.redis.close()
-		self.redis = nil
+	if c.redis != nil {
+		c.redis.close()
+		c.redis = nil
 	}
 	return nil
 }
 
 // Connects the client to the given host and port.
-func (self *Client) Connect(host string, port uint) (err error) {
-	return self.dial(`tcp`, fmt.Sprintf(`%s:%d`, host, port))
+func (c *Client) Connect(host string, port uint) (err error) {
+	return c.dial(`tcp`, fmt.Sprintf(`%s:%d`, host, port))
 }
 
 // ConnectWithTimeout attempts to connect to a redis-server, giving up after
 // the specified time.
-func (self *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
-	return self.dialTimeout(`tcp`, fmt.Sprintf(`%s:%d`, host, port), timeout)
+func (c *Client) ConnectWithTimeout(host string, port uint, timeout time.Duration) error {
+	return c.dialTimeout(`tcp`, fmt.Sprintf(`%s:%d`, host, port), timeout)
 }
 
 // ConnectUnixNonBlock attempts to create a non-blocking connection with an
 // UNIX socket (deprecated).
-func (self *Client) ConnectUnixNonBlock(path string) error {
-	return self.ConnectUnix(path)
+func (c *Client) ConnectUnixNonBlock(path string) error {
+	return c.ConnectUnix(path)
 }
 
 // ConnectUnix attempts to create a connection with a UNIX socket.
-func (self *Client) ConnectUnix(path string) error {
-	return self.dial(`unix`, path)
+func (c *Client) ConnectUnix(path string) error {
+	return c.dial(`unix`, path)
 }
 
 // ConnectUnixWithTimeout attempts to create a connection with an UNIX socket,
 // giving up after the specified time.
-func (self *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) error {
-	return self.dialTimeout(`unix`, path, timeout)
+func (c *Client) ConnectUnixWithTimeout(path string, timeout time.Duration) error {
+	return c.dialTimeout(`unix`, path, timeout)
 }
 
-func (self *Client) dialTimeout(network, address string, timeout time.Duration) error {
+func (c *Client) dialTimeout(network, address string, timeout time.Duration) error {
 	var err error
 
-	if self == nil {
+	if c == nil {
 		return ErrNotInitialized
 	}
 
-	if self.redis != nil {
-		self.Close()
+	if c.redis != nil {
+		c.Close()
 	}
 
 	if timeout == 0 {
 		timeout = defaultTimeout
 	}
 
-	if self.redis, err = dialTimeout(network, address, timeout); err != nil {
+	if c.redis, err = dialTimeout(network, address, timeout); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (self *Client) dial(network, address string) error {
+func (c *Client) dial(network, address string) error {
 	var err error
 
-	if self == nil {
+	if c == nil {
 		return ErrNotInitialized
 	}
 
-	if self.redis != nil {
-		self.Close()
+	if c.redis != nil {
+		c.Close()
 	}
 
-	if self.redis, err = dial(network, address); err != nil {
+	if c.redis, err = dial(network, address); err != nil {
 		return err
 	}
 
@@ -137,8 +137,8 @@ func (self *Client) dial(network, address string) error {
 
 // Command builds a command specified by the `values` interface and stores the
 // result into the variable pointed by `dest`.
-func (self *Client) Command(dest interface{}, values ...interface{}) error {
-	if self == nil {
+func (c *Client) Command(dest interface{}, values ...interface{}) error {
+	if c == nil {
 		return ErrNotInitialized
 	}
 	bvalues := make([][]byte, len(values))
@@ -147,14 +147,13 @@ func (self *Client) Command(dest interface{}, values ...interface{}) error {
 		bvalues[i] = to.Bytes(values[i])
 	}
 	// Sending command to redis-server.
-	return self.command(dest, bvalues...)
+	return c.command(dest, bvalues...)
 }
 
-// Sendind a command and blocking until an answer is received.
-func (self *Client) bcommand(c chan []string, values ...[]byte) error {
-	return self.redis.blockCommand(c, values...)
+func (c *Client) bcommand(cn chan []string, values ...[]byte) error {
+	return c.redis.blockCommand(cn, values...)
 }
 
-func (self *Client) command(dest interface{}, values ...[]byte) error {
-	return self.redis.syncCommand(dest, values...)
+func (c *Client) command(dest interface{}, values ...[]byte) error {
+	return c.redis.syncCommand(dest, values...)
 }

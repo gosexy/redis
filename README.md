@@ -1,6 +1,7 @@
 # menteslibres.net/gosexy/redis
 
-The `redis` package is yet another native redis client for Go.
+The `redis` package was a wrapper for the official redis C client hiredis, as
+of October 2014, `redis` is now yet another native redis client for Go.
 
 [![Build Status](https://travis-ci.org/gosexy/redis.png)](https://travis-ci.org/gosexy/redis)
 
