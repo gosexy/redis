@@ -1396,6 +1396,7 @@ func TestPublishAndPSubscribe(t *testing.T) {
 	var clients int64
 	for i := 0; i < tests; i++ {
 		mu.Lock()
+		wg.Add(1)
 		clients, err = publisher.Publish("channel", i)
 		if err != nil {
 			t.Fatal("Publish(): ", err)
@@ -1403,7 +1404,6 @@ func TestPublishAndPSubscribe(t *testing.T) {
 		if clients < 1 {
 			t.Fatal("We should have at least one subscribed client.")
 		}
-		wg.Add(1)
 		mu.Unlock()
 	}
 
