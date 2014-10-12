@@ -78,6 +78,11 @@ func (c *Client) ConnectWithTimeout(host string, port uint, timeout time.Duratio
 	return c.dialTimeout(`tcp`, fmt.Sprintf(`%s:%d`, host, port), timeout)
 }
 
+// ConnectNonBlock connects the client to the given host and port (deprecated).
+func (c *Client) ConnectNonBlock(host string, port uint) error {
+	return c.Connect(host, port)
+}
+
 // ConnectUnixNonBlock attempts to create a non-blocking connection with an
 // UNIX socket (deprecated).
 func (c *Client) ConnectUnixNonBlock(path string) error {
