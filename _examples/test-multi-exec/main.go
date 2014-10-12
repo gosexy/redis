@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/xiam/resp"
 	"log"
 	"menteslibres.net/gosexy/redis"
-	"menteslibres.net/gosexy/to"
 	"reflect"
 )
 
@@ -43,15 +43,12 @@ func main() {
 		log.Printf(err.Error())
 	}
 
-	for _, el := range res {
-		switch v := el.(type) {
+	for _, v := range res {
+		switch m := v.(type) {
 		case []interface{}:
-			log.Printf("Got []interface{}")
-			for i, vv := range v {
-				log.Printf("Value at index %d (%v) has kind %s, we convert it to string: %v", i, vv, reflect.TypeOf(vv).Kind(), to.String(vv))
-			}
-		case interface{}:
-			log.Printf("Got value of kind %s (%v), we convert it to string: %s\n", reflect.TypeOf(v).Kind(), v, to.String(v))
+			log.Printf("Got an array of type %s with %d elements (%v).\n", reflect.TypeOf(m).Kind(), len(m), string(m[0].(*resp.Message).Interface().([]byte)))
+		case *resp.Message:
+			log.Printf("Got value of kind %s (%v), we use the integer part: %d\n", reflect.TypeOf(m).Kind(), m, m.Integer)
 		}
 	}
 
