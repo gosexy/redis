@@ -117,6 +117,7 @@ func (c *conn) syncCommand(dest interface{}, command ...[]byte) (err error) {
 	c.mu.Lock()
 
 	if err = c.write(data); err != nil {
+		c.mu.Unlock()
 		return err
 	}
 
@@ -124,7 +125,7 @@ func (c *conn) syncCommand(dest interface{}, command ...[]byte) (err error) {
 
 	c.mu.Unlock()
 
-	if dest == nil {
+	if dest == nil && err == resp.ErrExpectingDestination {
 		return nil
 	}
 
