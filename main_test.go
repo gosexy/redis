@@ -2336,8 +2336,8 @@ func TestRawList(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Command failed: %s", err.Error())
 		}
-		if r == 0 {
-			t.Fatalf("Failed")
+		if r != i+1 {
+			t.Fatalf("Failed, expecting %d, got %d", i+1, r)
 		}
 	}
 
