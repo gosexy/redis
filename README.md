@@ -1,7 +1,9 @@
 # menteslibres.net/gosexy/redis
 
-The `redis` package was a wrapper for the official redis C client hiredis, as
-of October 2014, `redis` is now yet another native redis client for Go.
+Package `redis` was formerly a wrapper for the official redis C client
+[hiredis][10]. As of October 2014, package `redis` was splitted into two
+different packages: a [RESP decoder][8] (`resp`) and the [redis client][9]
+(`redis`) this page describes.
 
 [![Build Status](https://travis-ci.org/gosexy/redis.png)](https://travis-ci.org/gosexy/redis)
 
@@ -19,12 +21,12 @@ Use `import` to use `redis` in your program:
 
 ```
 import (
-	"menteslibres.net/gosexy/redis"
+  "menteslibres.net/gosexy/redis"
 )
 ```
 
 The `redis.New()` function returns a `*redis.Client` pointer that you can use
-to interact with any redis server.
+to interact with a redis server.
 
 This example shows how to connect and ping a redis server.
 
@@ -197,3 +199,6 @@ Don't forget to check the [complete list of redis commands][7] too!
 [5]: http://godoc.org
 [6]: http://godoc.org/menteslibres.net/gosexy/redis
 [7]: http://redis.io/commands
+[8]: https://github.com/gosexy/redis
+[9]: https://github.com/xiam/resp
+[10]: https://github.com/redis/hiredis
