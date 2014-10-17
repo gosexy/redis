@@ -37,6 +37,7 @@ type conn struct {
 	reader       *bufio.Reader
 	writer       *bufio.Writer
 	decoder      *resp.Decoder
+	encoder      *resp.Encoder
 }
 
 func newConn(nc net.Conn) (*conn, error) {
@@ -50,6 +51,7 @@ func newConn(nc net.Conn) (*conn, error) {
 	c.writer = bufio.NewWriter(c.conn)
 
 	c.decoder = resp.NewDecoder(c.reader)
+	c.encoder = resp.NewEncoder(c.writer)
 
 	return c, nil
 }
@@ -76,23 +78,6 @@ func dialTimeout(network string, address string, timeout time.Duration) (*conn, 
 	return newConn(nc)
 }
 
-func (c *conn) write(message []byte) (err error) {
-	_, err = c.writer.Write(message)
-	c.writer.Flush()
-	return
-}
-
-func (c *conn) writeCommand(command ...interface{}) error {
-	var data []byte
-	var err error
-
-	if data, err = resp.Marshal(command); err != nil {
-		return err
-	}
-
-	return c.write(data)
-}
-
 func (c *conn) close() error {
 	c.subscription = false
 	if c.conn != nil {
@@ -103,20 +88,18 @@ func (c *conn) close() error {
 }
 
 func (c *conn) syncCommand(dest interface{}, command ...[]byte) (err error) {
-	var data []byte
-
 	if c.conn == nil {
 		return ErrNotConnected
 	}
 
-	if data, err = resp.Marshal(command); err != nil {
+	if err = c.encoder.Encode(command); err != nil {
 		return err
 	}
 
 	// This is an atomic operation, for now.
 	c.mu.Lock()
 
-	if err = c.write(data); err != nil {
+	if err = c.writer.Flush(); err != nil {
 		c.mu.Unlock()
 		return err
 	}
@@ -151,16 +134,15 @@ func (c *conn) asyncCommand(dest interface{}, command ...[]byte) (chan error, er
 }
 
 func (c *conn) blockCommand(d chan []string, command ...[]byte) error {
-	var data []byte
 	var err error
 
-	if data, err = resp.Marshal(command); err != nil {
+	if err = c.encoder.Encode(command); err != nil {
 		return err
 	}
 
 	c.mu.Lock()
 
-	if err = c.write(data); err != nil {
+	if err = c.writer.Flush(); err != nil {
 		return err
 	}
 

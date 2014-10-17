@@ -199,6 +199,6 @@ Don't forget to check the [complete list of redis commands][7] too!
 [5]: http://godoc.org
 [6]: http://godoc.org/menteslibres.net/gosexy/redis
 [7]: http://redis.io/commands
-[8]: https://github.com/gosexy/redis
-[9]: https://github.com/xiam/resp
+[8]: https://github.com/xiam/resp
+[9]: https://github.com/gosexy/redis
 [10]: https://github.com/redis/hiredis
