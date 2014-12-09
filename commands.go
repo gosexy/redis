@@ -1430,24 +1430,19 @@ func (c *Client) Ping() (ret string, err error) {
 	return
 }
 
-/*
-PSETEX works exactly like SETEX with the sole difference that the expire time is
-specified in milliseconds instead of seconds.
-
-http://redis.io/commands/psetex
-*/
-func (c *Client) PSetEx(key string, milliseconds int64, value interface{}) (string, error) {
-	var ret string
-
-	err := c.command(
+// PSetEx works exactly like SetEx with the sole difference that the expire
+// time is specified in milliseconds instead of seconds.
+//
+// http://redis.io/commands/psetex
+func (c *Client) PSetEx(key string, milliseconds int64, value interface{}) (ret string, err error) {
+	err = c.command(
 		&ret,
 		[]byte("PSETEX"),
 		[]byte(key),
 		to.Bytes(milliseconds),
 		to.Bytes(value),
 	)
-
-	return ret, err
+	return
 }
 
 /*
@@ -2005,24 +2000,19 @@ func (c *Client) SetBit(key string, offset int64, value int64) (int64, error) {
 	return ret, err
 }
 
-/*
-Set key to hold the string value and set key to timeout after a given number of
-seconds. This command is equivalent to executing the following commands:
-
-http://redis.io/commands/setex
-*/
-func (c *Client) SetEx(key string, seconds int64, value interface{}) (int, error) {
-	var ret int
-
-	err := c.command(
+// SetEx sets key to hold the string value and set key to timeout after a given
+// number of seconds.
+//
+// http://redis.io/commands/setex
+func (c *Client) SetEx(key string, seconds int64, value interface{}) (ret string, err error) {
+	err = c.command(
 		&ret,
 		[]byte("SETEX"),
 		[]byte(key),
 		to.Bytes(seconds),
 		to.Bytes(value),
 	)
-
-	return ret, err
+	return
 }
 
 /*
