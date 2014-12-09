@@ -2842,14 +2842,10 @@ func (c *Client) ZUnionStore(destination string, numkeys int64, key string, para
 	return ret, err
 }
 
-/*
-SCAN iterates the set of keys in the currently selected Redis database.
-
-http://redis.io/commands/scan
-*/
-func (c *Client) Scan(cursor int64, arguments ...interface{}) ([]string, error) {
-	var ret []string
-
+// SCAN iterates the set of keys in the currently selected Redis database.
+//
+// http://redis.io/commands/scan
+func (c *Client) Scan(cursor int64, arguments ...interface{}) (ret []interface{}, err error) {
 	args := make([][]byte, len(arguments)+2)
 	args[0] = []byte("SCAN")
 	args[1] = to.Bytes(cursor)
@@ -2858,9 +2854,9 @@ func (c *Client) Scan(cursor int64, arguments ...interface{}) ([]string, error) 
 		args[2+i] = to.Bytes(arguments[i])
 	}
 
-	err := c.command(&ret, args...)
+	err = c.command(&ret, args...)
 
-	return ret, err
+	return
 }
 
 /*
