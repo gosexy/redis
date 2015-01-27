@@ -2864,18 +2864,17 @@ SSCAN iterates elements of Sets types.
 
 http://redis.io/commands/scan
 */
-func (c *Client) SScan(cursor int64, arguments ...interface{}) ([]string, error) {
-	var ret []string
-
-	args := make([][]byte, len(arguments)+2)
+func (c *Client) SScan(key string, cursor int64, arguments ...interface{}) (ret []interface{}, err error) {
+	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("SSCAN")
-	args[1] = to.Bytes(cursor)
+	args[1] = []byte(key)
+	args[2] = to.Bytes(cursor)
 
 	for i := range arguments {
-		args[2+i] = to.Bytes(arguments[i])
+		args[3+i] = to.Bytes(arguments[i])
 	}
 
-	err := c.command(&ret, args...)
+	err = c.command(&ret, args...)
 
 	return ret, err
 }
@@ -2885,18 +2884,17 @@ HSCAN iterates fields of Hash types and their associated values.
 
 http://redis.io/commands/scan
 */
-func (c *Client) HScan(cursor int64, arguments ...interface{}) ([]string, error) {
-	var ret []string
-
-	args := make([][]byte, len(arguments)+2)
+func (c *Client) HScan(key string, cursor int64, arguments ...interface{}) (ret []interface{}, err error) {
+	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("HSCAN")
-	args[1] = to.Bytes(cursor)
+	args[1] = []byte(key)
+	args[2] = to.Bytes(cursor)
 
 	for i := range arguments {
-		args[2+i] = to.Bytes(arguments[i])
+		args[3+i] = to.Bytes(arguments[i])
 	}
 
-	err := c.command(&ret, args...)
+	err = c.command(&ret, args...)
 
 	return ret, err
 }
@@ -2906,18 +2904,17 @@ ZSCAN iterates elements of Sorted Set types and their associated scores.
 
 http://redis.io/commands/zscan
 */
-func (c *Client) ZScan(cursor int64, arguments ...interface{}) ([]string, error) {
-	var ret []string
-
-	args := make([][]byte, len(arguments)+2)
+func (c *Client) ZScan(key string, cursor int64, arguments ...interface{}) (ret []interface{}, err error) {
+	args := make([][]byte, len(arguments)+3)
 	args[0] = []byte("ZSCAN")
-	args[1] = to.Bytes(cursor)
+	args[1] = []byte(key)
+	args[2] = to.Bytes(cursor)
 
 	for i := range arguments {
-		args[2+i] = to.Bytes(arguments[i])
+		args[3+i] = to.Bytes(arguments[i])
 	}
 
-	err := c.command(&ret, args...)
+	err = c.command(&ret, args...)
 
 	return ret, err
 }
