@@ -275,8 +275,8 @@ while Redis 2.6 can read the whole configuration of a server using this command.
 
 http://redis.io/commands/config-get
 */
-func (c *Client) ConfigGet(parameter string) (string, error) {
-	var ret string
+func (c *Client) ConfigGet(parameter string) ([]string, error) {
+	var ret []string
 	err := c.command(
 		&ret,
 		[]byte("CONFIG"),
