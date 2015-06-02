@@ -20,7 +20,7 @@
 // WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 // The `redis` package is yet another Go client library for redis-server.
-package redis
+package redis // menteslibres.net/gosexy/redis
 
 import (
 	"errors"
