@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -149,7 +150,7 @@ func TestGet(t *testing.T) {
 	}
 
 	if err != ErrNilReply {
-		t.Fatalf("Expecting a redis.ErrNilReply error.")
+		t.Fatalf("Expecting a redis.ErrNilReply error, got %q.", err)
 	}
 
 	// Making sure https://github.com/gosexy/redis/issues/23 does not interfere
@@ -2364,7 +2365,7 @@ func TestRawList(t *testing.T) {
 }
 
 // https://github.com/gosexy/redis/issues/27
-func TestInfo(t *testing.T) {
+func Test_Issue27(t *testing.T) {
 	var client *Client
 	var err error
 
@@ -2384,6 +2385,31 @@ func TestInfo(t *testing.T) {
 
 	if len(info) == 0 {
 		t.Fatalf("Failed to actually get data from INFO.")
+	}
+}
+
+// See https://github.com/gosexy/redis/issues/38
+func Test_Issue38(t *testing.T) {
+	var client *Client
+	var err error
+
+	client = New()
+
+	if err = client.Connect(testHost, testPort); err != nil {
+		t.Fatalf("Client failed to connect to an up-and-running redis server: %q", err)
+	}
+
+	client.Del("mylist")
+	client.Set("mylist", 1)
+
+	defer client.Close()
+
+	if _, err = client.RPush("mylist", 1); err == nil {
+		t.Fatalf("Expecting an error.")
+	}
+
+	if !strings.Contains(err.Error(), "WRONGTYPE") {
+		t.Fatalf("Expecting WRONGTYPE error.")
 	}
 }
 
